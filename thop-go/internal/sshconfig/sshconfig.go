@@ -162,6 +162,14 @@ func (c *Config) ResolveIdentityFile(alias string) string {
 	return ""
 }
 
+// ResolveProxyJump returns the ProxyJump for an alias
+func (c *Config) ResolveProxyJump(alias string) string {
+	if host := c.Hosts[alias]; host != nil && host.ProxyJump != "" {
+		return host.ProxyJump
+	}
+	return ""
+}
+
 // ListHosts returns all configured host aliases
 func (c *Config) ListHosts() []string {
 	hosts := make([]string, 0, len(c.Hosts))

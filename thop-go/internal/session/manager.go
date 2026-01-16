@@ -86,14 +86,15 @@ func (m *Manager) createSession(name string, cfg config.Session) Session {
 		user := cfg.User
 		port := cfg.Port
 		keyFile := cfg.IdentityFile
+		jumpHost := cfg.JumpHost
+
+		// Use host alias to look up in SSH config
+		alias := host
+		if alias == "" {
+			alias = name // Use session name as alias if no host specified
+		}
 
 		if m.sshConfig != nil {
-			// Use host alias to look up in SSH config
-			alias := host
-			if alias == "" {
-				alias = name // Use session name as alias if no host specified
-			}
-
 			// Resolve hostname from SSH config
 			if host == "" {
 				host = m.sshConfig.ResolveHost(alias)
@@ -124,6 +125,11 @@ func (m *Manager) createSession(name string, cfg config.Session) Session {
 			if keyFile == "" {
 				keyFile = m.sshConfig.ResolveIdentityFile(alias)
 			}
+
+			// Resolve jump host from SSH config if not specified
+			if jumpHost == "" {
+				jumpHost = m.sshConfig.ResolveProxyJump(alias)
+			}
 		}
 
 		session := NewSSHSession(SSHConfig{
@@ -132,10 +138,15 @@ func (m *Manager) createSession(name string, cfg config.Session) Session {
 			Port:            port,
 			User:            user,
 			KeyFile:         keyFile,
+			JumpHost:        jumpHost,
 			Timeout:         m.commandTimeout,
 			StartupCommands: cfg.StartupCommands,
 		})
-		logger.Debug("created SSH session %q: user=%s host=%s port=%d, startup_commands=%d", name, user, host, port, len(cfg.StartupCommands))
+		if jumpHost != "" {
+			logger.Debug("created SSH session %q: user=%s host=%s port=%d via jump_host=%s, startup_commands=%d", name, user, host, port, jumpHost, len(cfg.StartupCommands))
+		} else {
+			logger.Debug("created SSH session %q: user=%s host=%s port=%d, startup_commands=%d", name, user, host, port, len(cfg.StartupCommands))
+		}
 		return session
 	default:
 		session := NewLocalSession(name, cfg.Shell)

@@ -140,6 +140,46 @@ type = "ssh"
 host = "myserver"  # Will resolve from SSH config
 ```
 
+### Jump Host / Bastion Support
+
+thop supports connecting through jump hosts (bastion servers). You can configure this in two ways:
+
+**Via thop config:**
+
+```toml
+[sessions.internal]
+type = "ssh"
+host = "internal.server.com"
+user = "deploy"
+jump_host = "bastion.example.com"  # Simple hostname
+# Or with full details:
+# jump_host = "jumpuser@bastion.example.com:2222"
+```
+
+**Via SSH config (ProxyJump):**
+
+```
+# ~/.ssh/config
+Host internal
+    HostName internal.server.com
+    User deploy
+    ProxyJump bastion.example.com
+
+Host bastion.example.com
+    User jumpuser
+    IdentityFile ~/.ssh/bastion_key
+```
+
+Then in thop config:
+
+```toml
+[sessions.internal]
+type = "ssh"
+host = "internal"  # Will use ProxyJump from SSH config
+```
+
+The jump host connection is established first, then the target connection is made through the jump host tunnel.
+
 ### Environment Variables
 
 - `THOP_CONFIG`: Path to config file (default: `~/.config/thop/config.toml`)

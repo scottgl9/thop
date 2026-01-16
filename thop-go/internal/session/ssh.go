@@ -23,7 +23,9 @@ type SSHSession struct {
 	port            int
 	user            string
 	keyFile         string
+	jumpHost        string // Jump host for ProxyJump (format: user@host:port or just host)
 	client          *ssh.Client
+	jumpClient      *ssh.Client // Jump host client (if using jump host)
 	cwd             string
 	env             map[string]string
 	connected       bool
@@ -40,6 +42,7 @@ type SSHConfig struct {
 	User            string
 	KeyFile         string
 	Password        string        // Optional, for auth command
+	JumpHost        string        // Jump host for ProxyJump (format: user@host:port or just host)
 	ConnectTimeout  time.Duration // Connection timeout (default 30s)
 	Timeout         time.Duration // Command timeout (default 300s)
 	StartupCommands []string      // Commands to run after connecting
@@ -63,6 +66,7 @@ func NewSSHSession(cfg SSHConfig) *SSHSession {
 		port:            cfg.Port,
 		user:            cfg.User,
 		keyFile:         cfg.KeyFile,
+		jumpHost:        cfg.JumpHost,
 		env:             make(map[string]string),
 		connectTimeout:  cfg.ConnectTimeout,
 		commandTimeout:  cfg.Timeout,
@@ -122,9 +126,18 @@ func (s *SSHSession) Connect() error {
 		Timeout:         s.connectTimeout,
 	}
 
-	// Connect
+	// Connect (with or without jump host)
 	addr := fmt.Sprintf("%s:%d", s.host, s.port)
-	client, err := ssh.Dial("tcp", addr, config)
+	var client *ssh.Client
+
+	if s.jumpHost != "" {
+		// Connect via jump host
+		client, err = s.connectViaJumpHost(addr, config)
+	} else {
+		// Direct connection
+		client, err = ssh.Dial("tcp", addr, config)
+	}
+
 	if err != nil {
 		logger.Debug("SSH dial failed: %v", err)
 		return s.wrapConnectionError(err)
@@ -151,6 +164,91 @@ func (s *SSHSession) Connect() error {
 	return nil
 }
 
+// connectViaJumpHost establishes a connection through a jump host
+func (s *SSHSession) connectViaJumpHost(targetAddr string, targetConfig *ssh.ClientConfig) (*ssh.Client, error) {
+	// Parse jump host (format: user@host:port or host)
+	jumpUser, jumpHostAddr, jumpPort := s.parseJumpHost(s.jumpHost)
+
+	logger.Debug("SSH connecting via jump host %s@%s:%d", jumpUser, jumpHostAddr, jumpPort)
+
+	// Build auth methods for jump host (reuse same methods)
+	jumpAuthMethods, err := s.getAuthMethods()
+	if err != nil {
+		return nil, fmt.Errorf("jump host auth: %w", err)
+	}
+
+	// Get host key callback for jump host
+	jumpHostKeyCallback, err := s.getHostKeyCallback()
+	if err != nil {
+		return nil, fmt.Errorf("jump host key callback: %w", err)
+	}
+
+	// Create jump host config
+	jumpConfig := &ssh.ClientConfig{
+		User:            jumpUser,
+		Auth:            jumpAuthMethods,
+		HostKeyCallback: jumpHostKeyCallback,
+		Timeout:         s.connectTimeout,
+	}
+
+	// Connect to jump host
+	jumpAddr := fmt.Sprintf("%s:%d", jumpHostAddr, jumpPort)
+	jumpClient, err := ssh.Dial("tcp", jumpAddr, jumpConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to jump host %s: %w", jumpAddr, err)
+	}
+	s.jumpClient = jumpClient
+	logger.Debug("SSH connected to jump host %s", jumpAddr)
+
+	// Open a connection to the target through the jump host
+	conn, err := jumpClient.Dial("tcp", targetAddr)
+	if err != nil {
+		jumpClient.Close()
+		s.jumpClient = nil
+		return nil, fmt.Errorf("failed to connect to target %s via jump host: %w", targetAddr, err)
+	}
+
+	// Create SSH connection over the jump host connection
+	ncc, chans, reqs, err := ssh.NewClientConn(conn, targetAddr, targetConfig)
+	if err != nil {
+		conn.Close()
+		jumpClient.Close()
+		s.jumpClient = nil
+		return nil, fmt.Errorf("failed to establish SSH connection to %s: %w", targetAddr, err)
+	}
+
+	client := ssh.NewClient(ncc, chans, reqs)
+	logger.Debug("SSH connection established to %s via jump host", targetAddr)
+
+	return client, nil
+}
+
+// parseJumpHost parses a jump host specification (user@host:port or host)
+func (s *SSHSession) parseJumpHost(jumpHost string) (user, host string, port int) {
+	port = 22 // Default SSH port
+
+	// Check for user@
+	if idx := strings.Index(jumpHost, "@"); idx != -1 {
+		user = jumpHost[:idx]
+		jumpHost = jumpHost[idx+1:]
+	} else {
+		// Use current user as default
+		user = s.user
+	}
+
+	// Check for :port
+	if idx := strings.LastIndex(jumpHost, ":"); idx != -1 {
+		host = jumpHost[:idx]
+		if p, err := fmt.Sscanf(jumpHost[idx+1:], "%d", &port); err != nil || p != 1 {
+			port = 22
+		}
+	} else {
+		host = jumpHost
+	}
+
+	return user, host, port
+}
+
 // runStartupCommands executes the configured startup commands
 func (s *SSHSession) runStartupCommands() {
 	logger.Debug("SSH running %d startup command(s) on session %q", len(s.startupCommands), s.name)
@@ -174,6 +272,14 @@ func (s *SSHSession) Disconnect() error {
 		err := s.client.Close()
 		s.client = nil
 		s.connected = false
+
+		// Also close jump client if present
+		if s.jumpClient != nil {
+			s.jumpClient.Close()
+			s.jumpClient = nil
+			logger.Debug("SSH jump host connection closed")
+		}
+
 		return err
 	}
 	return nil
