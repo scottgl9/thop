@@ -1,0 +1,48 @@
+# thop configuration example
+# Copy to ~/.config/thop/config.toml and customize
+
+# Global settings
+[settings]
+default_session = "local"
+command_timeout = 300
+reconnect_attempts = 5
+reconnect_backoff_base = 2
+log_level = "info"
+# state_file = "~/.local/share/thop/state.json"  # Uncomment to override
+
+# Local session (always available)
+[sessions.local]
+type = "local"
+# shell = "/bin/bash"  # Uncomment to override SHELL
+
+# Example: Production server
+# [sessions.prod]
+# type = "ssh"
+# host = "prod.example.com"
+# user = "deploy"
+# port = 22
+# identity_file = "~/.ssh/id_ed25519"
+# startup_commands = [
+#   "cd /var/www/app",
+#   "source .env"
+# ]
+
+# Example: Staging server
+# [sessions.staging]
+# type = "ssh"
+# host = "staging.example.com"
+# user = "deploy"
+
+# Example: Development server
+# [sessions.dev]
+# type = "ssh"
+# host = "dev.example.com"
+# user = "developer"
+# port = 2222
+
+# Example: Server with jump host (bastion)
+# [sessions.internal]
+# type = "ssh"
+# host = "internal-server"
+# user = "admin"
+# jump_host = "bastion.example.com"

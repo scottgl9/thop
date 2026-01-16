@@ -7,7 +7,7 @@
 
 | Phase | Status | Progress |
 |-------|--------|----------|
-| Phase 0: Language Evaluation | Not Started | 0% |
+| Phase 0: Language Evaluation | In Progress | 50% |
 | Phase 1: Core MVP | Not Started | 0% |
 | Phase 2: Robustness | Not Started | 0% |
 | Phase 3: Polish | Not Started | 0% |
@@ -15,65 +15,68 @@
 | Testing | Not Started | 0% |
 | Documentation | In Progress | 50% |
 
-**Overall Progress**: 5%
+**Overall Progress**: 15%
 
 ---
 
 ## Phase 0: Language Evaluation
 
-### Go Prototype (`thop-go/`)
+### Go Prototype (`thop-go/`) - COMPLETE
+
+**Binary Size**: 4.8MB (release), 7.2MB (debug)
+**Build Time**: Fast (~2s)
 
 #### Project Setup
 | Task | Status | Notes |
 |------|--------|-------|
-| Initialize Go module | Not Started | |
-| Add dependencies | Not Started | |
-| Create project structure | Not Started | |
+| Initialize Go module | Complete | github.com/scottgl9/thop |
+| Add dependencies | Complete | go-toml/v2, x/crypto/ssh |
+| Create project structure | Complete | cmd/, internal/, configs/ |
 
 #### Interactive Mode
 | Task | Status | Notes |
 |------|--------|-------|
-| Main loop with prompt | Not Started | |
-| Slash command parsing | Not Started | |
-| Output display | Not Started | |
+| Main loop with prompt | Complete | (session) $ prompt |
+| Slash command parsing | Complete | /connect, /switch, /status, etc. |
+| Output display | Complete | stdout/stderr handling |
 
 #### Local Shell
 | Task | Status | Notes |
 |------|--------|-------|
-| Command execution | Not Started | |
-| Capture stdout/stderr | Not Started | |
-| Exit code handling | Not Started | |
+| Command execution | Complete | Via shell subprocess |
+| Capture stdout/stderr | Complete | bytes.Buffer capture |
+| Exit code handling | Complete | ExitError handling |
 
 #### SSH Session
 | Task | Status | Notes |
 |------|--------|-------|
-| SSH connection | Not Started | |
-| Command execution | Not Started | |
-| Key authentication | Not Started | |
-| Auth error handling | Not Started | |
+| SSH connection | Complete | golang.org/x/crypto/ssh |
+| Command execution | Complete | Per-command sessions |
+| Key authentication | Complete | Agent + key files |
+| Auth error handling | Complete | Structured errors |
 
 #### Slash Commands
 | Task | Status | Notes |
 |------|--------|-------|
-| `/connect` | Not Started | |
-| `/switch` | Not Started | |
-| `/local` | Not Started | |
-| `/status` | Not Started | |
-| `/help` | Not Started | |
+| `/connect` | Complete | With connection feedback |
+| `/switch` | Complete | Auto-connects SSH sessions |
+| `/local` | Complete | Alias for /switch local |
+| `/status` | Complete | JSON and text output |
+| `/help` | Complete | Full command list |
 
 #### Proxy Mode
 | Task | Status | Notes |
 |------|--------|-------|
-| `--proxy` flag | Not Started | |
-| Stdin reading | Not Started | |
-| Session routing | Not Started | |
-| Output handling | Not Started | |
+| `--proxy` flag | Complete | SHELL compatible |
+| Stdin reading | Complete | Line-by-line |
+| Session routing | Complete | To active session |
+| Output handling | Complete | Passthrough |
 
 #### Configuration
 | Task | Status | Notes |
 |------|--------|-------|
-| TOML parsing | Not Started | |
-| Session loading | Not Started | |
+| TOML parsing | Complete | go-toml/v2 |
+| Session loading | Complete | Local + SSH sessions |
 
 ---
 
