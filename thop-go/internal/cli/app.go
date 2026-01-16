@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/scottgl9/thop/internal/config"
+	"github.com/scottgl9/thop/internal/logger"
 	"github.com/scottgl9/thop/internal/session"
 	"github.com/scottgl9/thop/internal/state"
 )
@@ -58,10 +59,33 @@ func (a *App) Run(args []string) error {
 	}
 	a.config = cfg
 
+	// Initialize logger
+	logLevel := cfg.Settings.LogLevel
+	if a.verbose {
+		logLevel = "debug"
+	} else if a.quiet {
+		logLevel = "error"
+	}
+
+	if err := logger.Init(logger.Config{
+		Level:    logLevel,
+		FilePath: logger.DefaultLogPath(),
+		Enabled:  logLevel != "off" && logLevel != "none",
+	}); err != nil {
+		// Non-fatal, continue without file logging
+		if a.verbose {
+			fmt.Fprintf(os.Stderr, "Warning: failed to initialize logger: %v\n", err)
+		}
+	}
+
+	logger.Info("thop starting, version=%s", a.Version)
+	logger.Debug("config loaded from %s", a.configPath)
+
 	// Initialize state manager
 	a.state = state.NewManager(cfg.Settings.StateFile)
 	if err := a.state.Load(); err != nil {
 		// Non-fatal, continue with defaults
+		logger.Warn("failed to load state: %v", err)
 		if a.verbose {
 			fmt.Fprintf(os.Stderr, "Warning: failed to load state: %v\n", err)
 		}
@@ -69,6 +93,7 @@ func (a *App) Run(args []string) error {
 
 	// Initialize session manager
 	a.sessions = session.NewManager(cfg, a.state)
+	logger.Debug("session manager initialized with %d sessions", len(cfg.Sessions))
 
 	// Handle special flags
 	if a.showStatus {

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/scottgl9/thop/internal/config"
+	"github.com/scottgl9/thop/internal/logger"
 	"github.com/scottgl9/thop/internal/sshconfig"
 	"github.com/scottgl9/thop/internal/state"
 )
@@ -61,6 +62,8 @@ func NewManager(cfg *config.Config, stateMgr *state.Manager) *Manager {
 	for name, sessionCfg := range cfg.Sessions {
 		m.sessions[name] = m.createSession(name, sessionCfg)
 	}
+
+	logger.Debug("session manager initialized with %d sessions, timeout=%v", len(m.sessions), timeout)
 
 	// Load active session from state
 	if stateMgr != nil {
@@ -130,10 +133,12 @@ func (m *Manager) createSession(name string, cfg config.Session) Session {
 			KeyFile: keyFile,
 			Timeout: m.commandTimeout,
 		})
+		logger.Debug("created SSH session %q: user=%s host=%s port=%d", name, user, host, port)
 		return session
 	default:
 		session := NewLocalSession(name, cfg.Shell)
 		session.SetTimeout(m.commandTimeout)
+		logger.Debug("created local session %q: shell=%s", name, cfg.Shell)
 		return session
 	}
 }
@@ -169,6 +174,7 @@ func (m *Manager) SetActiveSession(name string) error {
 	defer m.mu.Unlock()
 
 	if _, ok := m.sessions[name]; !ok {
+		logger.Warn("set active session failed: session %q not found", name)
 		return &Error{
 			Code:    ErrSessionNotFound,
 			Message: fmt.Sprintf("Session '%s' not found", name),
@@ -176,6 +182,7 @@ func (m *Manager) SetActiveSession(name string) error {
 		}
 	}
 
+	logger.Info("switching active session from %q to %q", m.activeSession, name)
 	m.activeSession = name
 
 	// Persist to state file
@@ -193,6 +200,7 @@ func (m *Manager) Connect(name string) error {
 	m.mu.Unlock()
 
 	if !ok {
+		logger.Warn("connect failed: session %q not found", name)
 		return &Error{
 			Code:    ErrSessionNotFound,
 			Message: fmt.Sprintf("Session '%s' not found", name),
@@ -200,8 +208,10 @@ func (m *Manager) Connect(name string) error {
 		}
 	}
 
+	logger.Info("connecting to session %q", name)
 	err := session.Connect()
 	if err != nil {
+		logger.Error("connect failed for session %q: %v", name, err)
 		return err
 	}
 
@@ -210,6 +220,7 @@ func (m *Manager) Connect(name string) error {
 		m.state.SetSessionConnected(name, true)
 	}
 
+	logger.Info("connected to session %q", name)
 	return nil
 }
 
@@ -220,6 +231,7 @@ func (m *Manager) Disconnect(name string) error {
 	m.mu.Unlock()
 
 	if !ok {
+		logger.Warn("disconnect failed: session %q not found", name)
 		return &Error{
 			Code:    ErrSessionNotFound,
 			Message: fmt.Sprintf("Session '%s' not found", name),
@@ -227,11 +239,18 @@ func (m *Manager) Disconnect(name string) error {
 		}
 	}
 
+	logger.Info("disconnecting from session %q", name)
 	err := session.Disconnect()
 
 	// Update state
 	if m.state != nil {
 		m.state.SetSessionConnected(name, false)
+	}
+
+	if err != nil {
+		logger.Warn("disconnect error for session %q: %v", name, err)
+	} else {
+		logger.Info("disconnected from session %q", name)
 	}
 
 	return err
@@ -241,21 +260,25 @@ func (m *Manager) Disconnect(name string) error {
 func (m *Manager) Execute(cmd string) (*ExecuteResult, error) {
 	session := m.GetActiveSession()
 	if session == nil {
+		logger.Warn("execute failed: no active session")
 		return nil, &Error{
 			Code:    ErrSessionNotFound,
 			Message: "No active session",
 		}
 	}
 
+	logger.Debug("executing on session %q: %s", session.Name(), cmd)
 	result, err := session.Execute(cmd)
 
 	// For SSH sessions, try to reconnect on connection errors
 	if err != nil && session.Type() == "ssh" {
 		if sessionErr, ok := err.(*Error); ok && sessionErr.Retryable {
 			if sessionErr.Code == ErrSessionDisconnected || sessionErr.Code == ErrConnectionFailed {
+				logger.Info("connection lost on session %q, attempting reconnect", session.Name())
 				// Attempt reconnection
 				if reconnectErr := m.attemptReconnect(session); reconnectErr == nil {
 					// Retry the command after successful reconnection
+					logger.Debug("retrying command after reconnect: %s", cmd)
 					result, err = session.Execute(cmd)
 				}
 			}
@@ -265,6 +288,10 @@ func (m *Manager) Execute(cmd string) (*ExecuteResult, error) {
 	// Update cwd in state if successful
 	if err == nil && m.state != nil {
 		m.state.SetSessionCWD(session.Name(), session.GetCWD())
+	}
+
+	if err != nil {
+		logger.Debug("execute failed on session %q: %v", session.Name(), err)
 	}
 
 	return result, err
@@ -280,9 +307,12 @@ func (m *Manager) attemptReconnect(session Session) error {
 	var lastErr error
 	backoff := m.reconnectBackoff
 
+	logger.Info("starting reconnection attempts for session %q (max %d attempts)", session.Name(), m.reconnectAttempts)
+
 	for attempt := 1; attempt <= m.reconnectAttempts; attempt++ {
 		// Wait before retry (except first attempt)
 		if attempt > 1 {
+			logger.Debug("reconnect attempt %d/%d for session %q, waiting %v", attempt, m.reconnectAttempts, session.Name(), backoff)
 			time.Sleep(backoff)
 			backoff *= 2 // Exponential backoff
 		}
@@ -290,6 +320,7 @@ func (m *Manager) attemptReconnect(session Session) error {
 		// Attempt reconnection
 		if err := sshSession.Reconnect(); err != nil {
 			lastErr = err
+			logger.Warn("reconnect attempt %d/%d failed for session %q: %v", attempt, m.reconnectAttempts, session.Name(), err)
 			continue
 		}
 
@@ -298,9 +329,11 @@ func (m *Manager) attemptReconnect(session Session) error {
 			m.state.SetSessionConnected(session.Name(), true)
 		}
 
+		logger.Info("reconnected to session %q after %d attempt(s)", session.Name(), attempt)
 		return nil
 	}
 
+	logger.Error("failed to reconnect to session %q after %d attempts", session.Name(), m.reconnectAttempts)
 	return &Error{
 		Code:      ErrConnectionFailed,
 		Message:   fmt.Sprintf("Failed to reconnect after %d attempts: %v", m.reconnectAttempts, lastErr),

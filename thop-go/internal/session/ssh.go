@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/scottgl9/thop/internal/logger"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
 	"golang.org/x/crypto/ssh/knownhosts"
@@ -78,8 +79,11 @@ func (s *SSHSession) Type() string {
 // Connect establishes the SSH connection
 func (s *SSHSession) Connect() error {
 	if s.connected && s.client != nil {
+		logger.Debug("SSH session %q already connected", s.name)
 		return nil
 	}
+
+	logger.Debug("SSH connecting to %s@%s:%d", s.user, s.host, s.port)
 
 	// Build auth methods
 	authMethods, err := s.getAuthMethods()
@@ -88,6 +92,7 @@ func (s *SSHSession) Connect() error {
 	}
 
 	if len(authMethods) == 0 {
+		logger.Warn("SSH no authentication methods available for %q", s.name)
 		return &Error{
 			Code:       ErrAuthPasswordRequired,
 			Message:    fmt.Sprintf("No authentication methods available for %s", s.name),
@@ -96,6 +101,8 @@ func (s *SSHSession) Connect() error {
 			Suggestion: fmt.Sprintf("Use /auth %s to provide credentials", s.name),
 		}
 	}
+
+	logger.Debug("SSH found %d authentication method(s)", len(authMethods))
 
 	// Get host key callback
 	hostKeyCallback, err := s.getHostKeyCallback()
@@ -115,16 +122,19 @@ func (s *SSHSession) Connect() error {
 	addr := fmt.Sprintf("%s:%d", s.host, s.port)
 	client, err := ssh.Dial("tcp", addr, config)
 	if err != nil {
+		logger.Debug("SSH dial failed: %v", err)
 		return s.wrapConnectionError(err)
 	}
 
 	s.client = client
 	s.connected = true
+	logger.Debug("SSH connection established to %s", addr)
 
 	// Get initial working directory
 	result, err := s.executeRaw("pwd")
 	if err == nil && result.ExitCode == 0 {
 		s.cwd = strings.TrimSpace(result.Stdout)
+		logger.Debug("SSH initial cwd: %s", s.cwd)
 	} else {
 		s.cwd = "~"
 	}
@@ -135,6 +145,7 @@ func (s *SSHSession) Connect() error {
 // Disconnect closes the SSH connection
 func (s *SSHSession) Disconnect() error {
 	if s.client != nil {
+		logger.Debug("SSH disconnecting from %s@%s", s.user, s.host)
 		err := s.client.Close()
 		s.client = nil
 		s.connected = false
@@ -232,6 +243,7 @@ func (s *SSHSession) executeRaw(cmdStr string) (*ExecuteResult, error) {
 		// Command completed
 	case <-time.After(s.commandTimeout):
 		// Timeout - close the session to kill the command
+		logger.Warn("SSH command timed out after %s on %q", s.commandTimeout, s.name)
 		session.Close()
 		return nil, &Error{
 			Code:      ErrCommandTimeout,

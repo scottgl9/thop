@@ -136,10 +136,10 @@ After language selection, implement full MVP in chosen language.
 - [ ] `/trust <session>` - Trust host key
 - [ ] Display fingerprint before trusting
 
-### Logging
-- [ ] Log file at `~/.local/share/thop/thop.log`
-- [ ] Configurable log levels
-- [ ] No sensitive data in logs
+### Logging ✅
+- [x] Log file at `~/.local/share/thop/thop.log`
+- [x] Configurable log levels
+- [x] No sensitive data in logs
 
 ### CLI Polish ✅
 - [x] `--status` flag to show status and exit

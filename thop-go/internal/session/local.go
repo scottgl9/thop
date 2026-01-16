@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/scottgl9/thop/internal/logger"
 )
 
 // LocalSession represents a local shell session
@@ -115,6 +117,7 @@ func (s *LocalSession) Execute(cmdStr string) (*ExecuteResult, error) {
 	if err != nil {
 		// Check if timeout was exceeded
 		if ctx.Err() == context.DeadlineExceeded {
+			logger.Warn("local command timed out after %s on %q", s.timeout, s.name)
 			return nil, &Error{
 				Code:      ErrCommandTimeout,
 				Message:   "Command timed out after " + s.timeout.String(),
