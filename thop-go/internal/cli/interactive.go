@@ -52,6 +52,9 @@ func (a *App) runInteractive() error {
 		readline.PcItem("/cp"),
 		readline.PcItem("/add-session"),
 		readline.PcItem("/add"),
+		readline.PcItem("/read"),
+		readline.PcItem("/cat"),
+		readline.PcItem("/write"),
 		readline.PcItem("/local"),
 		readline.PcItem("/status"),
 		readline.PcItem("/help"),
@@ -316,6 +319,18 @@ func (a *App) handleSlashCommand(input string) error {
 		}
 		return a.cmdAddSession(args[0], args[1])
 
+	case "/read", "/cat":
+		if len(args) < 1 {
+			return fmt.Errorf("usage: /read <path>")
+		}
+		return a.cmdRead(args[0])
+
+	case "/write":
+		if len(args) < 1 {
+			return fmt.Errorf("usage: /write <path> (content from stdin in proxy mode)")
+		}
+		return a.cmdWrite(args[0], args[1:])
+
 	default:
 		return fmt.Errorf("unknown command: %s (use /help for available commands)", cmd)
 	}
@@ -370,6 +385,8 @@ func (a *App) printSlashHelp() {
   /trust <session>    Trust host key for SSH session
   /copy <src> <dst>   Copy file between sessions (session:path format)
   /add-session <name> <host>  Add new SSH session to config
+  /read <path>        Read file contents (from current session)
+  /write <path> <content>  Write content to file (on current session)
   /env [KEY=VALUE]    Show or set environment variables
   /help               Show this help
   /exit               Exit thop
@@ -382,6 +399,7 @@ Shortcuts:
   /d    = /close (disconnect)
   /cp   = /copy
   /add  = /add-session
+  /cat  = /read
   /q    = /exit
 
 Copy examples:
@@ -392,6 +410,10 @@ Copy examples:
 Add session examples:
   /add-session myserver user@example.com      Add SSH session (port 22)
   /add-session prod deploy@prod.server.com:2222  Add with custom port
+
+File access (works on remote sessions via SFTP):
+  /read /etc/hostname            Read remote file contents
+  /write /tmp/test.txt Hello     Write "Hello" to remote file
 
 Keyboard shortcuts:
   Ctrl+D  Exit
@@ -679,6 +701,86 @@ func (a *App) cmdCopy(src, dst string) error {
 	}
 
 	return fmt.Errorf("unsupported copy operation")
+}
+
+// cmdRead handles the /read command to read and output file contents
+func (a *App) cmdRead(path string) error {
+	sess := a.sessions.GetActiveSession()
+	if sess == nil {
+		return fmt.Errorf("no active session")
+	}
+
+	if sess.Type() == "local" {
+		// Read local file
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("failed to read file: %w", err)
+		}
+		fmt.Print(string(data))
+		return nil
+	}
+
+	// Read remote file via SFTP
+	sshSess, ok := sess.(*session.SSHSession)
+	if !ok {
+		return fmt.Errorf("session is not an SSH session")
+	}
+
+	if !sshSess.IsConnected() {
+		return fmt.Errorf("session is not connected")
+	}
+
+	data, err := sshSess.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	fmt.Print(string(data))
+	return nil
+}
+
+// cmdWrite handles the /write command to write content to a file
+func (a *App) cmdWrite(path string, content []string) error {
+	sess := a.sessions.GetActiveSession()
+	if sess == nil {
+		return fmt.Errorf("no active session")
+	}
+
+	// If content provided as arguments, join them
+	var data string
+	if len(content) > 0 {
+		data = strings.Join(content, " ")
+	} else {
+		// In interactive mode, we can't easily read from stdin
+		// This is mainly useful in proxy mode where content comes via arguments
+		return fmt.Errorf("usage: /write <path> <content>")
+	}
+
+	if sess.Type() == "local" {
+		// Write local file
+		if err := os.WriteFile(path, []byte(data), 0644); err != nil {
+			return fmt.Errorf("failed to write file: %w", err)
+		}
+		fmt.Printf("Wrote %d bytes to %s\n", len(data), path)
+		return nil
+	}
+
+	// Write remote file via SFTP
+	sshSess, ok := sess.(*session.SSHSession)
+	if !ok {
+		return fmt.Errorf("session is not an SSH session")
+	}
+
+	if !sshSess.IsConnected() {
+		return fmt.Errorf("session is not connected")
+	}
+
+	if err := sshSess.WriteFile(path, []byte(data), 0644); err != nil {
+		return err
+	}
+
+	fmt.Printf("Wrote %d bytes to %s\n", len(data), path)
+	return nil
 }
 
 // cmdAddSession handles the /add-session command to add a new SSH session
