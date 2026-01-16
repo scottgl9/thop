@@ -67,7 +67,8 @@ func Load(path string) (*Config, error) {
 
 	// Check if config file exists
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		// Return defaults if no config file
+		// Apply environment overrides even without a config file
+		cfg.applyEnvOverrides()
 		return cfg, nil
 	}
 

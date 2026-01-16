@@ -70,7 +70,8 @@ func (s *LocalSession) IsConnected() bool {
 // Execute runs a command in the local shell
 func (s *LocalSession) Execute(cmdStr string) (*ExecuteResult, error) {
 	// Handle cd commands specially to track cwd
-	if strings.HasPrefix(strings.TrimSpace(cmdStr), "cd ") {
+	trimmedCmd := strings.TrimSpace(cmdStr)
+	if trimmedCmd == "cd" || strings.HasPrefix(trimmedCmd, "cd ") {
 		return s.handleCD(cmdStr)
 	}
 

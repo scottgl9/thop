@@ -1,0 +1,48 @@
+[package]
+name = "thop"
+version = "0.1.0"
+edition = "2021"
+description = "Terminal Hopper for Agents - seamless shell wrapper for SSH sessions"
+authors = ["Scott Luu"]
+license = "MIT"
+
+[dependencies]
+# CLI argument parsing
+clap = { version = "4.4.11", features = ["derive"] }
+
+# Configuration
+toml = "0.7.8"
+serde = { version = "1.0.195", features = ["derive"] }
+serde_json = "1.0.111"
+
+# SSH
+ssh2 = "0.9.4"
+
+# File system and paths
+dirs = "5.0.1"
+
+# Error handling
+thiserror = "1.0.56"
+anyhow = "1.0.79"
+
+# System
+libc = "0.2.152"
+
+# Time/date
+chrono = { version = "0.4.31", features = ["serde"] }
+
+# Pin indexmap to a version compatible with rustc 1.75
+indexmap = "2.2.6"
+
+[dev-dependencies]
+tempfile = "3.9"
+
+[profile.release]
+lto = true
+strip = true
+codegen-units = 1
+panic = "abort"
+
+[profile.dev]
+opt-level = 0
+debug = true

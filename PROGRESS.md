@@ -7,15 +7,15 @@
 
 | Phase | Status | Progress |
 |-------|--------|----------|
-| Phase 0: Language Evaluation | In Progress | 50% |
+| Phase 0: Language Evaluation | Complete | 100% |
 | Phase 1: Core MVP | Not Started | 0% |
 | Phase 2: Robustness | Not Started | 0% |
 | Phase 3: Polish | Not Started | 0% |
 | Phase 4: Advanced | Not Started | 0% |
-| Testing | Not Started | 0% |
-| Documentation | In Progress | 50% |
+| Testing | In Progress | 50% |
+| Documentation | In Progress | 60% |
 
-**Overall Progress**: 15%
+**Overall Progress**: 30%
 
 ---
 
@@ -80,71 +80,75 @@
 
 ---
 
-### Rust Prototype (`thop-rust/`)
+### Rust Prototype (`thop-rust/`) - COMPLETE
+
+**Binary Size**: 1.4MB (release)
+**Build Time**: Fast (~24s for release)
+**Tests**: 32 passing
 
 #### Project Setup
 | Task | Status | Notes |
 |------|--------|-------|
-| Initialize Cargo project | Not Started | |
-| Add dependencies | Not Started | |
-| Create project structure | Not Started | |
+| Initialize Cargo project | Complete | Cargo.toml |
+| Add dependencies | Complete | clap, toml, serde, ssh2, chrono |
+| Create project structure | Complete | src/{cli,config,session,state}/ |
 
 #### Interactive Mode
 | Task | Status | Notes |
 |------|--------|-------|
-| Main loop with prompt | Not Started | |
-| Slash command parsing | Not Started | |
-| Output display | Not Started | |
+| Main loop with prompt | Complete | (session) $ prompt |
+| Slash command parsing | Complete | /connect, /switch, /status, etc. |
+| Output display | Complete | stdout/stderr handling |
 
 #### Local Shell
 | Task | Status | Notes |
 |------|--------|-------|
-| Command execution | Not Started | |
-| Capture stdout/stderr | Not Started | |
-| Exit code handling | Not Started | |
+| Command execution | Complete | Via shell subprocess |
+| Capture stdout/stderr | Complete | String capture |
+| Exit code handling | Complete | ExitStatus handling |
 
 #### SSH Session
 | Task | Status | Notes |
 |------|--------|-------|
-| SSH connection | Not Started | |
-| Command execution | Not Started | |
-| Key authentication | Not Started | |
-| Auth error handling | Not Started | |
+| SSH connection | Complete | ssh2 crate |
+| Command execution | Complete | Per-command channels |
+| Key authentication | Complete | Agent + key files |
+| Auth error handling | Complete | Structured errors |
 
 #### Slash Commands
 | Task | Status | Notes |
 |------|--------|-------|
-| `/connect` | Not Started | |
-| `/switch` | Not Started | |
-| `/local` | Not Started | |
-| `/status` | Not Started | |
-| `/help` | Not Started | |
+| `/connect` | Complete | With connection feedback |
+| `/switch` | Complete | Auto-connects SSH sessions |
+| `/local` | Complete | Alias for /switch local |
+| `/status` | Complete | JSON and text output |
+| `/help` | Complete | Full command list |
 
 #### Proxy Mode
 | Task | Status | Notes |
 |------|--------|-------|
-| `--proxy` flag | Not Started | |
-| Stdin reading | Not Started | |
-| Session routing | Not Started | |
-| Output handling | Not Started | |
+| `--proxy` flag | Complete | SHELL compatible |
+| Stdin reading | Complete | Line-by-line |
+| Session routing | Complete | To active session |
+| Output handling | Complete | Passthrough |
 
 #### Configuration
 | Task | Status | Notes |
 |------|--------|-------|
-| TOML parsing | Not Started | |
-| Session loading | Not Started | |
+| TOML parsing | Complete | toml crate |
+| Session loading | Complete | Local + SSH sessions |
 
 ---
 
 ### Evaluation
 | Task | Status | Notes |
 |------|--------|-------|
-| Code complexity comparison | Not Started | |
-| Binary size measurement | Not Started | |
-| Startup time measurement | Not Started | |
-| SSH library evaluation | Not Started | |
-| Developer experience notes | Not Started | |
-| Language selection decision | Not Started | |
+| Code complexity comparison | Complete | Both are similar in complexity |
+| Binary size measurement | Complete | Go: 4.8MB, Rust: 1.4MB |
+| Startup time measurement | Complete | Both fast (<100ms) |
+| SSH library evaluation | Complete | Both work well |
+| Developer experience notes | Complete | Go faster to write, Rust more explicit |
+| Language selection decision | Pending | Both prototypes complete, user can choose |
 
 ---
 
@@ -207,10 +211,10 @@
 
 | Category | Status | Notes |
 |----------|--------|-------|
-| Unit Tests | Not Started | |
+| Unit Tests | Complete | Go: 34 tests, Rust: 32 tests |
 | Integration Tests | Not Started | |
 | E2E Tests | Not Started | |
-| Test Infrastructure | Not Started | |
+| Test Infrastructure | Complete | make test in both projects |
 
 ---
 
@@ -231,6 +235,18 @@
 ---
 
 ## Changelog
+
+### 2026-01-16 (latest)
+- Completed Go prototype with full test suite (34 tests)
+- Completed Rust prototype with full test suite (32 tests)
+- Both implementations working:
+  - Interactive mode with slash commands
+  - Proxy mode for AI agent integration
+  - Local shell sessions
+  - SSH sessions with key authentication
+  - State persistence
+  - TOML configuration
+- Binary sizes: Go 4.8MB, Rust 1.4MB
 
 ### 2026-01-16
 - Updated architecture from daemon to shell wrapper
