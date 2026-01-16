@@ -87,6 +87,7 @@ func (m *Manager) createSession(name string, cfg config.Session) Session {
 		port := cfg.Port
 		keyFile := cfg.IdentityFile
 		jumpHost := cfg.JumpHost
+		agentForwarding := cfg.AgentForwarding
 
 		// Use host alias to look up in SSH config
 		alias := host
@@ -130,6 +131,11 @@ func (m *Manager) createSession(name string, cfg config.Session) Session {
 			if jumpHost == "" {
 				jumpHost = m.sshConfig.ResolveProxyJump(alias)
 			}
+
+			// Resolve agent forwarding from SSH config if not specified in thop config
+			if !agentForwarding {
+				agentForwarding = m.sshConfig.ResolveForwardAgent(alias)
+			}
 		}
 
 		session := NewSSHSession(SSHConfig{
@@ -139,6 +145,7 @@ func (m *Manager) createSession(name string, cfg config.Session) Session {
 			User:            user,
 			KeyFile:         keyFile,
 			JumpHost:        jumpHost,
+			AgentForwarding: agentForwarding,
 			Timeout:         m.commandTimeout,
 			StartupCommands: cfg.StartupCommands,
 		})

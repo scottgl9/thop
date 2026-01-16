@@ -180,6 +180,40 @@ host = "internal"  # Will use ProxyJump from SSH config
 
 The jump host connection is established first, then the target connection is made through the jump host tunnel.
 
+### SSH Agent Forwarding
+
+thop supports SSH agent forwarding, which allows the remote server to use your local SSH keys for authentication (useful for git over SSH, chained SSH connections, etc.).
+
+**Via thop config:**
+
+```toml
+[sessions.dev]
+type = "ssh"
+host = "dev.example.com"
+user = "developer"
+agent_forwarding = true
+```
+
+**Via SSH config (ForwardAgent):**
+
+```
+# ~/.ssh/config
+Host dev
+    HostName dev.example.com
+    User developer
+    ForwardAgent yes
+```
+
+Then in thop config:
+
+```toml
+[sessions.dev]
+type = "ssh"
+host = "dev"  # Will use ForwardAgent from SSH config
+```
+
+With agent forwarding enabled, you can use git over SSH, SSH to other servers, or any other operation that requires your SSH keys on the remote server.
+
 ### Environment Variables
 
 - `THOP_CONFIG`: Path to config file (default: `~/.config/thop/config.toml`)

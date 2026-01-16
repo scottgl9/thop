@@ -9,12 +9,13 @@ import (
 
 // HostConfig represents SSH configuration for a host
 type HostConfig struct {
-	Host         string
-	HostName     string
-	User         string
-	Port         string
-	IdentityFile string
-	ProxyJump    string
+	Host          string
+	HostName      string
+	User          string
+	Port          string
+	IdentityFile  string
+	ProxyJump     string
+	ForwardAgent  bool
 }
 
 // Config holds parsed SSH configuration
@@ -109,6 +110,8 @@ func LoadFromFile(path string) (*Config, error) {
 				currentHost.IdentityFile = value
 			case "proxyjump":
 				currentHost.ProxyJump = value
+			case "forwardagent":
+				currentHost.ForwardAgent = strings.ToLower(value) == "yes"
 			}
 		}
 	}
@@ -168,6 +171,14 @@ func (c *Config) ResolveProxyJump(alias string) string {
 		return host.ProxyJump
 	}
 	return ""
+}
+
+// ResolveForwardAgent returns whether agent forwarding is enabled for an alias
+func (c *Config) ResolveForwardAgent(alias string) bool {
+	if host := c.Hosts[alias]; host != nil {
+		return host.ForwardAgent
+	}
+	return false
 }
 
 // ListHosts returns all configured host aliases

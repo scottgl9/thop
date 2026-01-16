@@ -24,6 +24,7 @@ type SSHSession struct {
 	user            string
 	keyFile         string
 	jumpHost        string // Jump host for ProxyJump (format: user@host:port or just host)
+	agentForwarding bool   // Whether to forward SSH agent to remote
 	client          *ssh.Client
 	jumpClient      *ssh.Client // Jump host client (if using jump host)
 	cwd             string
@@ -43,6 +44,7 @@ type SSHConfig struct {
 	KeyFile         string
 	Password        string        // Optional, for auth command
 	JumpHost        string        // Jump host for ProxyJump (format: user@host:port or just host)
+	AgentForwarding bool          // Whether to forward SSH agent to remote
 	ConnectTimeout  time.Duration // Connection timeout (default 30s)
 	Timeout         time.Duration // Command timeout (default 300s)
 	StartupCommands []string      // Commands to run after connecting
@@ -67,6 +69,7 @@ func NewSSHSession(cfg SSHConfig) *SSHSession {
 		user:            cfg.User,
 		keyFile:         cfg.KeyFile,
 		jumpHost:        cfg.JumpHost,
+		agentForwarding: cfg.AgentForwarding,
 		env:             make(map[string]string),
 		connectTimeout:  cfg.ConnectTimeout,
 		commandTimeout:  cfg.Timeout,
@@ -359,6 +362,14 @@ func (s *SSHSession) executeRawWithContext(ctx context.Context, cmdStr string) (
 		return nil, fmt.Errorf("failed to create session: %w", err)
 	}
 	defer session.Close()
+
+	// Request agent forwarding if enabled
+	if s.agentForwarding {
+		if err := agent.RequestAgentForwarding(session); err != nil {
+			logger.Debug("SSH agent forwarding request failed: %v", err)
+			// Don't fail the command, just log and continue
+		}
+	}
 
 	// Build environment prefix (export commands)
 	// This is more reliable than session.Setenv which requires server AcceptEnv config

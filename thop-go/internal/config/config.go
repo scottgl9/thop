@@ -33,6 +33,7 @@ type Session struct {
 	Port            int      `toml:"port,omitempty"`
 	IdentityFile    string   `toml:"identity_file,omitempty"`
 	JumpHost        string   `toml:"jump_host,omitempty"`
+	AgentForwarding bool     `toml:"agent_forwarding,omitempty"`
 	StartupCommands []string `toml:"startup_commands,omitempty"`
 }
 
