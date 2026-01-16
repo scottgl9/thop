@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/pkg/sftp"
 	"github.com/scottgl9/thop/internal/logger"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
@@ -810,4 +812,162 @@ func (s *SSHSession) Port() int {
 // User returns the SSH user
 func (s *SSHSession) User() string {
 	return s.user
+}
+
+// UploadFile uploads a local file to the remote server
+func (s *SSHSession) UploadFile(localPath, remotePath string) error {
+	if !s.IsConnected() {
+		return fmt.Errorf("session is not connected")
+	}
+
+	// Create SFTP client
+	sftpClient, err := sftp.NewClient(s.client)
+	if err != nil {
+		return fmt.Errorf("failed to create SFTP client: %w", err)
+	}
+	defer sftpClient.Close()
+
+	// Open local file
+	localFile, err := os.Open(localPath)
+	if err != nil {
+		return fmt.Errorf("failed to open local file: %w", err)
+	}
+	defer localFile.Close()
+
+	// Get local file info for permissions
+	localInfo, err := localFile.Stat()
+	if err != nil {
+		return fmt.Errorf("failed to stat local file: %w", err)
+	}
+
+	// Create remote file
+	remoteFile, err := sftpClient.Create(remotePath)
+	if err != nil {
+		return fmt.Errorf("failed to create remote file: %w", err)
+	}
+	defer remoteFile.Close()
+
+	// Copy file contents
+	bytesWritten, err := io.Copy(remoteFile, localFile)
+	if err != nil {
+		return fmt.Errorf("failed to copy file: %w", err)
+	}
+
+	// Set permissions on remote file
+	if err := sftpClient.Chmod(remotePath, localInfo.Mode()); err != nil {
+		logger.Warn("failed to set permissions on remote file: %v", err)
+	}
+
+	logger.Debug("uploaded %d bytes from %s to %s:%s", bytesWritten, localPath, s.host, remotePath)
+	return nil
+}
+
+// DownloadFile downloads a remote file to the local filesystem
+func (s *SSHSession) DownloadFile(remotePath, localPath string) error {
+	if !s.IsConnected() {
+		return fmt.Errorf("session is not connected")
+	}
+
+	// Create SFTP client
+	sftpClient, err := sftp.NewClient(s.client)
+	if err != nil {
+		return fmt.Errorf("failed to create SFTP client: %w", err)
+	}
+	defer sftpClient.Close()
+
+	// Open remote file
+	remoteFile, err := sftpClient.Open(remotePath)
+	if err != nil {
+		return fmt.Errorf("failed to open remote file: %w", err)
+	}
+	defer remoteFile.Close()
+
+	// Get remote file info for permissions
+	remoteInfo, err := remoteFile.Stat()
+	if err != nil {
+		return fmt.Errorf("failed to stat remote file: %w", err)
+	}
+
+	// Create local file
+	localFile, err := os.Create(localPath)
+	if err != nil {
+		return fmt.Errorf("failed to create local file: %w", err)
+	}
+	defer localFile.Close()
+
+	// Copy file contents
+	bytesWritten, err := io.Copy(localFile, remoteFile)
+	if err != nil {
+		return fmt.Errorf("failed to copy file: %w", err)
+	}
+
+	// Set permissions on local file
+	if err := os.Chmod(localPath, remoteInfo.Mode()); err != nil {
+		logger.Warn("failed to set permissions on local file: %v", err)
+	}
+
+	logger.Debug("downloaded %d bytes from %s:%s to %s", bytesWritten, s.host, remotePath, localPath)
+	return nil
+}
+
+// ReadFile reads a file from the remote server and returns its contents
+func (s *SSHSession) ReadFile(remotePath string) ([]byte, error) {
+	if !s.IsConnected() {
+		return nil, fmt.Errorf("session is not connected")
+	}
+
+	// Create SFTP client
+	sftpClient, err := sftp.NewClient(s.client)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create SFTP client: %w", err)
+	}
+	defer sftpClient.Close()
+
+	// Open remote file
+	remoteFile, err := sftpClient.Open(remotePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open remote file: %w", err)
+	}
+	defer remoteFile.Close()
+
+	// Read file contents
+	contents, err := io.ReadAll(remoteFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read remote file: %w", err)
+	}
+
+	return contents, nil
+}
+
+// WriteFile writes data to a file on the remote server
+func (s *SSHSession) WriteFile(remotePath string, data []byte, perm os.FileMode) error {
+	if !s.IsConnected() {
+		return fmt.Errorf("session is not connected")
+	}
+
+	// Create SFTP client
+	sftpClient, err := sftp.NewClient(s.client)
+	if err != nil {
+		return fmt.Errorf("failed to create SFTP client: %w", err)
+	}
+	defer sftpClient.Close()
+
+	// Create remote file
+	remoteFile, err := sftpClient.Create(remotePath)
+	if err != nil {
+		return fmt.Errorf("failed to create remote file: %w", err)
+	}
+	defer remoteFile.Close()
+
+	// Write data
+	if _, err := remoteFile.Write(data); err != nil {
+		return fmt.Errorf("failed to write to remote file: %w", err)
+	}
+
+	// Set permissions
+	if err := sftpClient.Chmod(remotePath, perm); err != nil {
+		logger.Warn("failed to set permissions on remote file: %v", err)
+	}
+
+	return nil
 }

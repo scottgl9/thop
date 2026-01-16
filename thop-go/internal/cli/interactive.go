@@ -47,6 +47,8 @@ func (a *App) runInteractive() error {
 		readline.PcItem("/trust",
 			readline.PcItemDynamic(a.sessionCompleter()),
 		),
+		readline.PcItem("/copy"),
+		readline.PcItem("/cp"),
 		readline.PcItem("/local"),
 		readline.PcItem("/status"),
 		readline.PcItem("/help"),
@@ -299,6 +301,12 @@ func (a *App) handleSlashCommand(input string) error {
 		}
 		return a.cmdTrust(args[0])
 
+	case "/copy", "/cp":
+		if len(args) < 2 {
+			return fmt.Errorf("usage: /copy <source> <destination>\n  Examples:\n    /copy local:/path/to/file remote:/path/to/file\n    /copy remote:/path/to/file local:/path/to/file\n    /copy myserver:/path/to/file local:/path/to/file")
+		}
+		return a.cmdCopy(args[0], args[1])
+
 	default:
 		return fmt.Errorf("unknown command: %s (use /help for available commands)", cmd)
 	}
@@ -351,6 +359,7 @@ func (a *App) printSlashHelp() {
   /close <session>    Close an SSH connection
   /auth <session>     Set password for SSH session
   /trust <session>    Trust host key for SSH session
+  /copy <src> <dst>   Copy file between sessions (session:path format)
   /env [KEY=VALUE]    Show or set environment variables
   /help               Show this help
   /exit               Exit thop
@@ -361,7 +370,13 @@ Shortcuts:
   /l   = /local
   /s   = /status
   /d   = /close (disconnect)
+  /cp  = /copy
   /q   = /exit
+
+Copy examples:
+  /copy local:/path/file remote:/path/file    Upload to active SSH session
+  /copy remote:/path/file local:/path/file    Download from active SSH session
+  /copy server1:/path/file server2:/path/file Copy between two SSH sessions
 
 Keyboard shortcuts:
   Ctrl+D  Exit
@@ -525,6 +540,148 @@ func readPassword() (string, error) {
 		return "", err
 	}
 	return string(password), nil
+}
+
+// cmdCopy handles the /copy command for file transfer between sessions
+func (a *App) cmdCopy(src, dst string) error {
+	// Parse source and destination (format: session:path or just path for active session)
+	srcSession, srcPath := parseFileSpec(src)
+	dstSession, dstPath := parseFileSpec(dst)
+
+	// Default to active session if not specified
+	activeSession := a.sessions.GetActiveSessionName()
+	if srcSession == "" {
+		srcSession = activeSession
+	}
+	if dstSession == "" {
+		dstSession = activeSession
+	}
+
+	// Handle "remote" as alias for active SSH session
+	if srcSession == "remote" {
+		if activeSession == "local" {
+			return fmt.Errorf("no remote session active - use session name instead")
+		}
+		srcSession = activeSession
+	}
+	if dstSession == "remote" {
+		if activeSession == "local" {
+			return fmt.Errorf("no remote session active - use session name instead")
+		}
+		dstSession = activeSession
+	}
+
+	// Validate sessions exist
+	if !a.sessions.HasSession(srcSession) {
+		return fmt.Errorf("source session '%s' not found", srcSession)
+	}
+	if !a.sessions.HasSession(dstSession) {
+		return fmt.Errorf("destination session '%s' not found", dstSession)
+	}
+
+	srcSess, _ := a.sessions.GetSession(srcSession)
+	dstSess, _ := a.sessions.GetSession(dstSession)
+
+	// Handle different transfer scenarios
+	if srcSess.Type() == "local" && dstSess.Type() == "local" {
+		return fmt.Errorf("both source and destination are local - use regular cp command")
+	}
+
+	if srcSess.Type() == "local" && dstSess.Type() == "ssh" {
+		// Upload: local -> remote
+		sshSess, ok := dstSess.(*session.SSHSession)
+		if !ok {
+			return fmt.Errorf("destination is not an SSH session")
+		}
+		if !sshSess.IsConnected() {
+			fmt.Printf("Connecting to %s...\n", dstSession)
+			if err := a.sessions.Connect(dstSession); err != nil {
+				return err
+			}
+		}
+		fmt.Printf("Uploading %s to %s:%s...\n", srcPath, dstSession, dstPath)
+		if err := sshSess.UploadFile(srcPath, dstPath); err != nil {
+			return err
+		}
+		fmt.Printf("Upload complete\n")
+		return nil
+	}
+
+	if srcSess.Type() == "ssh" && dstSess.Type() == "local" {
+		// Download: remote -> local
+		sshSess, ok := srcSess.(*session.SSHSession)
+		if !ok {
+			return fmt.Errorf("source is not an SSH session")
+		}
+		if !sshSess.IsConnected() {
+			fmt.Printf("Connecting to %s...\n", srcSession)
+			if err := a.sessions.Connect(srcSession); err != nil {
+				return err
+			}
+		}
+		fmt.Printf("Downloading %s:%s to %s...\n", srcSession, srcPath, dstPath)
+		if err := sshSess.DownloadFile(srcPath, dstPath); err != nil {
+			return err
+		}
+		fmt.Printf("Download complete\n")
+		return nil
+	}
+
+	if srcSess.Type() == "ssh" && dstSess.Type() == "ssh" {
+		// Remote to remote: download then upload
+		srcSSH, _ := srcSess.(*session.SSHSession)
+		dstSSH, _ := dstSess.(*session.SSHSession)
+
+		// Connect both if needed
+		if !srcSSH.IsConnected() {
+			fmt.Printf("Connecting to %s...\n", srcSession)
+			if err := a.sessions.Connect(srcSession); err != nil {
+				return err
+			}
+		}
+		if !dstSSH.IsConnected() {
+			fmt.Printf("Connecting to %s...\n", dstSession)
+			if err := a.sessions.Connect(dstSession); err != nil {
+				return err
+			}
+		}
+
+		// Read from source
+		fmt.Printf("Reading %s:%s...\n", srcSession, srcPath)
+		data, err := srcSSH.ReadFile(srcPath)
+		if err != nil {
+			return fmt.Errorf("failed to read from %s: %w", srcSession, err)
+		}
+
+		// Write to destination
+		fmt.Printf("Writing to %s:%s...\n", dstSession, dstPath)
+		if err := dstSSH.WriteFile(dstPath, data, 0644); err != nil {
+			return fmt.Errorf("failed to write to %s: %w", dstSession, err)
+		}
+
+		fmt.Printf("Copy complete (%d bytes)\n", len(data))
+		return nil
+	}
+
+	return fmt.Errorf("unsupported copy operation")
+}
+
+// parseFileSpec parses a file specification in the format "session:path" or just "path"
+func parseFileSpec(spec string) (session, path string) {
+	// Handle Windows-style paths (C:\...) by checking if it looks like a drive letter
+	if len(spec) >= 2 && spec[1] == ':' && (spec[0] >= 'A' && spec[0] <= 'Z' || spec[0] >= 'a' && spec[0] <= 'z') {
+		// Windows absolute path
+		return "", spec
+	}
+
+	// Look for session:path format
+	idx := strings.Index(spec, ":")
+	if idx > 0 {
+		return spec[:idx], spec[idx+1:]
+	}
+
+	// Just a path, no session specified
+	return "", spec
 }
 
 // cmdTrust handles the /trust command for host key verification
