@@ -133,8 +133,8 @@ After language selection, implement full MVP in chosen language.
 - [x] `/auth <session>` - Provide password interactively
 - [ ] Password from environment variable
 - [ ] Password from file (0600 perms required)
-- [ ] `/trust <session>` - Trust host key
-- [ ] Display fingerprint before trusting
+- [x] `/trust <session>` - Trust host key
+- [x] Display fingerprint before trusting
 
 ### Logging ✅
 - [x] Log file at `~/.local/share/thop/thop.log`

@@ -44,6 +44,9 @@ func (a *App) runInteractive() error {
 		readline.PcItem("/auth",
 			readline.PcItemDynamic(a.sessionCompleter()),
 		),
+		readline.PcItem("/trust",
+			readline.PcItemDynamic(a.sessionCompleter()),
+		),
 		readline.PcItem("/local"),
 		readline.PcItem("/status"),
 		readline.PcItem("/help"),
@@ -290,6 +293,12 @@ func (a *App) handleSlashCommand(input string) error {
 		}
 		return a.cmdAuth(args[0])
 
+	case "/trust":
+		if len(args) == 0 {
+			return fmt.Errorf("usage: /trust <session>")
+		}
+		return a.cmdTrust(args[0])
+
 	default:
 		return fmt.Errorf("unknown command: %s (use /help for available commands)", cmd)
 	}
@@ -341,6 +350,7 @@ func (a *App) printSlashHelp() {
   /status             Show all sessions
   /close <session>    Close an SSH connection
   /auth <session>     Set password for SSH session
+  /trust <session>    Trust host key for SSH session
   /env [KEY=VALUE]    Show or set environment variables
   /help               Show this help
   /exit               Exit thop
@@ -515,4 +525,59 @@ func readPassword() (string, error) {
 		return "", err
 	}
 	return string(password), nil
+}
+
+// cmdTrust handles the /trust command for host key verification
+func (a *App) cmdTrust(name string) error {
+	if !a.sessions.HasSession(name) {
+		return &session.Error{
+			Code:    session.ErrSessionNotFound,
+			Message: fmt.Sprintf("Session '%s' not found", name),
+			Session: name,
+		}
+	}
+
+	sess, _ := a.sessions.GetSession(name)
+	if sess.Type() != "ssh" {
+		return fmt.Errorf("session '%s' is not an SSH session", name)
+	}
+
+	// Get the SSH session
+	sshSess, ok := sess.(*session.SSHSession)
+	if !ok {
+		return fmt.Errorf("session '%s' is not an SSH session", name)
+	}
+
+	// Fetch the host key and fingerprint
+	fmt.Printf("Fetching host key from %s:%d...\n", sshSess.Host(), sshSess.Port())
+	keyType, fingerprint, err := sshSess.FetchHostKey()
+	if err != nil {
+		return fmt.Errorf("failed to fetch host key: %w", err)
+	}
+
+	// Display the fingerprint and ask for confirmation
+	fmt.Printf("\nHost key for %s:\n", name)
+	fmt.Printf("  Type:        %s\n", keyType)
+	fmt.Printf("  Fingerprint: %s\n", fingerprint)
+	fmt.Printf("\nAre you sure you want to trust this host? (yes/no): ")
+
+	var answer string
+	_, err = fmt.Scanln(&answer)
+	if err != nil {
+		return fmt.Errorf("failed to read response: %w", err)
+	}
+
+	answer = strings.ToLower(strings.TrimSpace(answer))
+	if answer != "yes" && answer != "y" {
+		fmt.Println("Host key not trusted.")
+		return nil
+	}
+
+	// Add the host key to known_hosts
+	if err := sshSess.AddHostKey(); err != nil {
+		return fmt.Errorf("failed to add host key: %w", err)
+	}
+
+	fmt.Printf("Host key added to known_hosts for %s\n", name)
+	return nil
 }

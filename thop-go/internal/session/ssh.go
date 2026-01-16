@@ -697,6 +697,111 @@ func (s *SSHSession) Host() string {
 	return s.host
 }
 
+// FetchHostKey fetches and returns the host key and fingerprint for the session
+func (s *SSHSession) FetchHostKey() (keyType string, fingerprint string, err error) {
+	addr := fmt.Sprintf("%s:%d", s.host, s.port)
+
+	// Create a config that accepts any host key (to fetch it)
+	var fetchedKey ssh.PublicKey
+	config := &ssh.ClientConfig{
+		User: s.user,
+		Auth: []ssh.AuthMethod{}, // No auth needed just to fetch key
+		HostKeyCallback: func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+			fetchedKey = key
+			return nil // Accept the key to fetch it
+		},
+		Timeout: 10 * time.Second,
+	}
+
+	// Try to connect - will fail auth but we'll get the host key
+	conn, err := net.DialTimeout("tcp", addr, config.Timeout)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to connect to %s: %w", addr, err)
+	}
+
+	// Do SSH handshake to get the host key
+	sshConn, _, _, err := ssh.NewClientConn(conn, addr, config)
+	if sshConn != nil {
+		sshConn.Close()
+	}
+	conn.Close()
+
+	if fetchedKey == nil {
+		return "", "", fmt.Errorf("failed to fetch host key")
+	}
+
+	keyType = fetchedKey.Type()
+	fingerprint = ssh.FingerprintSHA256(fetchedKey)
+
+	return keyType, fingerprint, nil
+}
+
+// AddHostKey adds the host's key to known_hosts
+func (s *SSHSession) AddHostKey() error {
+	addr := fmt.Sprintf("%s:%d", s.host, s.port)
+	home, _ := os.UserHomeDir()
+	knownHostsPath := filepath.Join(home, ".ssh", "known_hosts")
+
+	// Ensure .ssh directory exists
+	sshDir := filepath.Dir(knownHostsPath)
+	if err := os.MkdirAll(sshDir, 0700); err != nil {
+		return fmt.Errorf("failed to create .ssh directory: %w", err)
+	}
+
+	// Fetch the host key
+	var fetchedKey ssh.PublicKey
+	config := &ssh.ClientConfig{
+		User: s.user,
+		Auth: []ssh.AuthMethod{},
+		HostKeyCallback: func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+			fetchedKey = key
+			return nil
+		},
+		Timeout: 10 * time.Second,
+	}
+
+	conn, err := net.DialTimeout("tcp", addr, config.Timeout)
+	if err != nil {
+		return fmt.Errorf("failed to connect to %s: %w", addr, err)
+	}
+
+	sshConn, _, _, err := ssh.NewClientConn(conn, addr, config)
+	if sshConn != nil {
+		sshConn.Close()
+	}
+	conn.Close()
+
+	if fetchedKey == nil {
+		return fmt.Errorf("failed to fetch host key")
+	}
+
+	// Format the host entry
+	// If using non-standard port, format is [host]:port
+	var hostEntry string
+	if s.port != 22 {
+		hostEntry = fmt.Sprintf("[%s]:%d", s.host, s.port)
+	} else {
+		hostEntry = s.host
+	}
+
+	// Create the known_hosts line
+	line := knownhosts.Line([]string{hostEntry}, fetchedKey)
+
+	// Append to known_hosts
+	f, err := os.OpenFile(knownHostsPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		return fmt.Errorf("failed to open known_hosts: %w", err)
+	}
+	defer f.Close()
+
+	if _, err := f.WriteString(line + "\n"); err != nil {
+		return fmt.Errorf("failed to write to known_hosts: %w", err)
+	}
+
+	logger.Info("added host key for %s to known_hosts", hostEntry)
+	return nil
+}
+
 // Port returns the SSH port
 func (s *SSHSession) Port() int {
 	return s.port
