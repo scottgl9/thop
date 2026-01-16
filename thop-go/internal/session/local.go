@@ -13,12 +13,13 @@ import (
 
 // LocalSession represents a local shell session
 type LocalSession struct {
-	name      string
-	shell     string
-	cwd       string
-	env       map[string]string
-	connected bool
-	timeout   time.Duration
+	name            string
+	shell           string
+	cwd             string
+	env             map[string]string
+	connected       bool
+	timeout         time.Duration
+	startupCommands []string
 }
 
 // NewLocalSession creates a new local session
@@ -51,6 +52,11 @@ func (s *LocalSession) SetTimeout(timeout time.Duration) {
 	s.timeout = timeout
 }
 
+// SetStartupCommands sets the startup commands to run on connect
+func (s *LocalSession) SetStartupCommands(commands []string) {
+	s.startupCommands = commands
+}
+
 // Name returns the session name
 func (s *LocalSession) Name() string {
 	return s.name
@@ -64,7 +70,29 @@ func (s *LocalSession) Type() string {
 // Connect establishes the session (no-op for local)
 func (s *LocalSession) Connect() error {
 	s.connected = true
+
+	// Run startup commands if any
+	if len(s.startupCommands) > 0 {
+		s.runStartupCommands()
+	}
+
 	return nil
+}
+
+// runStartupCommands executes the configured startup commands
+func (s *LocalSession) runStartupCommands() {
+	logger.Debug("local running %d startup command(s) on session %q", len(s.startupCommands), s.name)
+	for _, cmd := range s.startupCommands {
+		logger.Debug("local startup command: %s", cmd)
+		result, err := s.Execute(cmd)
+		if err != nil {
+			logger.Warn("local startup command failed: %s - %v", cmd, err)
+			continue
+		}
+		if result.ExitCode != 0 {
+			logger.Warn("local startup command exited with code %d: %s", result.ExitCode, cmd)
+		}
+	}
 }
 
 // Disconnect closes the session (no-op for local)

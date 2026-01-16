@@ -127,7 +127,7 @@ After language selection, implement full MVP in chosen language.
 - [x] Full `~/.ssh/config` parsing
 - [ ] SSH agent forwarding support
 - [ ] Jump host / bastion support
-- [ ] Startup commands per session
+- [x] Startup commands per session
 
 ### Authentication
 - [ ] `/auth <session>` - Provide password interactively

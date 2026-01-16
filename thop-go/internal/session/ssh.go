@@ -18,29 +18,31 @@ import (
 
 // SSHSession represents an SSH session to a remote host
 type SSHSession struct {
-	name           string
-	host           string
-	port           int
-	user           string
-	keyFile        string
-	client         *ssh.Client
-	cwd            string
-	env            map[string]string
-	connected      bool
-	connectTimeout time.Duration
-	commandTimeout time.Duration
+	name            string
+	host            string
+	port            int
+	user            string
+	keyFile         string
+	client          *ssh.Client
+	cwd             string
+	env             map[string]string
+	connected       bool
+	connectTimeout  time.Duration
+	commandTimeout  time.Duration
+	startupCommands []string
 }
 
 // SSHConfig contains SSH session configuration
 type SSHConfig struct {
-	Name           string
-	Host           string
-	Port           int
-	User           string
-	KeyFile        string
-	Password       string        // Optional, for auth command
-	ConnectTimeout time.Duration // Connection timeout (default 30s)
-	Timeout        time.Duration // Command timeout (default 300s)
+	Name            string
+	Host            string
+	Port            int
+	User            string
+	KeyFile         string
+	Password        string        // Optional, for auth command
+	ConnectTimeout  time.Duration // Connection timeout (default 30s)
+	Timeout         time.Duration // Command timeout (default 300s)
+	StartupCommands []string      // Commands to run after connecting
 }
 
 // NewSSHSession creates a new SSH session
@@ -56,14 +58,15 @@ func NewSSHSession(cfg SSHConfig) *SSHSession {
 	}
 
 	return &SSHSession{
-		name:           cfg.Name,
-		host:           cfg.Host,
-		port:           cfg.Port,
-		user:           cfg.User,
-		keyFile:        cfg.KeyFile,
-		env:            make(map[string]string),
-		connectTimeout: cfg.ConnectTimeout,
-		commandTimeout: cfg.Timeout,
+		name:            cfg.Name,
+		host:            cfg.Host,
+		port:            cfg.Port,
+		user:            cfg.User,
+		keyFile:         cfg.KeyFile,
+		env:             make(map[string]string),
+		connectTimeout:  cfg.ConnectTimeout,
+		commandTimeout:  cfg.Timeout,
+		startupCommands: cfg.StartupCommands,
 	}
 }
 
@@ -140,7 +143,28 @@ func (s *SSHSession) Connect() error {
 		s.cwd = "~"
 	}
 
+	// Run startup commands
+	if len(s.startupCommands) > 0 {
+		s.runStartupCommands()
+	}
+
 	return nil
+}
+
+// runStartupCommands executes the configured startup commands
+func (s *SSHSession) runStartupCommands() {
+	logger.Debug("SSH running %d startup command(s) on session %q", len(s.startupCommands), s.name)
+	for _, cmd := range s.startupCommands {
+		logger.Debug("SSH startup command: %s", cmd)
+		result, err := s.executeRaw(cmd)
+		if err != nil {
+			logger.Warn("SSH startup command failed: %s - %v", cmd, err)
+			continue
+		}
+		if result.ExitCode != 0 {
+			logger.Warn("SSH startup command exited with code %d: %s", result.ExitCode, cmd)
+		}
+	}
 }
 
 // Disconnect closes the SSH connection

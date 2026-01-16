@@ -127,19 +127,23 @@ func (m *Manager) createSession(name string, cfg config.Session) Session {
 		}
 
 		session := NewSSHSession(SSHConfig{
-			Name:    name,
-			Host:    host,
-			Port:    port,
-			User:    user,
-			KeyFile: keyFile,
-			Timeout: m.commandTimeout,
+			Name:            name,
+			Host:            host,
+			Port:            port,
+			User:            user,
+			KeyFile:         keyFile,
+			Timeout:         m.commandTimeout,
+			StartupCommands: cfg.StartupCommands,
 		})
-		logger.Debug("created SSH session %q: user=%s host=%s port=%d", name, user, host, port)
+		logger.Debug("created SSH session %q: user=%s host=%s port=%d, startup_commands=%d", name, user, host, port, len(cfg.StartupCommands))
 		return session
 	default:
 		session := NewLocalSession(name, cfg.Shell)
 		session.SetTimeout(m.commandTimeout)
-		logger.Debug("created local session %q: shell=%s", name, cfg.Shell)
+		if len(cfg.StartupCommands) > 0 {
+			session.SetStartupCommands(cfg.StartupCommands)
+		}
+		logger.Debug("created local session %q: shell=%s, startup_commands=%d", name, cfg.Shell, len(cfg.StartupCommands))
 		return session
 	}
 }

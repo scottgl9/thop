@@ -93,6 +93,30 @@ identity_file = "~/.ssh/prod_key"
 [sessions.staging]
 type = "ssh"
 host = "staging"  # Uses ~/.ssh/config alias
+
+[sessions.dev]
+type = "ssh"
+host = "dev.example.com"
+user = "developer"
+startup_commands = [
+    "cd ~/project",
+    "source venv/bin/activate"
+]
+```
+
+### Startup Commands
+
+You can configure commands to run automatically when connecting to a session:
+
+```toml
+[sessions.myserver]
+type = "ssh"
+host = "myserver"
+startup_commands = [
+    "cd ~/workspace",
+    "source ~/.bashrc",
+    "export PATH=$PATH:/custom/bin"
+]
 ```
 
 ### SSH Config Integration
