@@ -103,11 +103,11 @@ After language selection, implement full MVP in chosen language.
 - [x] Session isolation (independent state per session)
 - [x] Session listing with connection status
 
-### Reconnection
-- [ ] Automatic reconnection on connection failure
-- [ ] Exponential backoff for retries
-- [ ] Configurable max reconnection attempts
-- [ ] State recovery after reconnect
+### Reconnection ✅
+- [x] Automatic reconnection on connection failure
+- [x] Exponential backoff for retries
+- [x] Configurable max reconnection attempts
+- [x] State recovery after reconnect
 
 ### State Persistence
 - [x] Persist cwd/env across commands

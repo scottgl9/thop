@@ -148,6 +148,32 @@ func (s *SSHSession) IsConnected() bool {
 	return s.connected && s.client != nil
 }
 
+// CheckConnection checks if the connection is still alive
+func (s *SSHSession) CheckConnection() bool {
+	if !s.IsConnected() {
+		return false
+	}
+
+	// Try to create a session to verify connection is alive
+	session, err := s.client.NewSession()
+	if err != nil {
+		// Connection is dead
+		s.connected = false
+		return false
+	}
+	session.Close()
+	return true
+}
+
+// Reconnect attempts to reconnect the SSH session
+func (s *SSHSession) Reconnect() error {
+	// Close any existing connection
+	s.Disconnect()
+
+	// Attempt to connect
+	return s.Connect()
+}
+
 // Execute runs a command over SSH
 func (s *SSHSession) Execute(cmdStr string) (*ExecuteResult, error) {
 	if !s.IsConnected() {

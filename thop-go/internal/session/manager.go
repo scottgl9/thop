@@ -13,13 +13,15 @@ import (
 
 // Manager manages all sessions
 type Manager struct {
-	sessions       map[string]Session
-	activeSession  string
-	config         *config.Config
-	state          *state.Manager
-	sshConfig      *sshconfig.Config
-	commandTimeout time.Duration
-	mu             sync.RWMutex
+	sessions          map[string]Session
+	activeSession     string
+	config            *config.Config
+	state             *state.Manager
+	sshConfig         *sshconfig.Config
+	commandTimeout    time.Duration
+	reconnectAttempts int
+	reconnectBackoff  time.Duration
+	mu                sync.RWMutex
 }
 
 // NewManager creates a new session manager
@@ -33,13 +35,26 @@ func NewManager(cfg *config.Config, stateMgr *state.Manager) *Manager {
 		timeout = 300 * time.Second // Default 5 minutes
 	}
 
+	// Reconnection settings
+	reconnectAttempts := cfg.Settings.ReconnectAttempts
+	if reconnectAttempts == 0 {
+		reconnectAttempts = 3 // Default 3 attempts
+	}
+
+	reconnectBackoff := time.Duration(cfg.Settings.ReconnectBackoff) * time.Second
+	if reconnectBackoff == 0 {
+		reconnectBackoff = 2 * time.Second // Default 2 seconds base backoff
+	}
+
 	m := &Manager{
-		sessions:       make(map[string]Session),
-		activeSession:  cfg.Settings.DefaultSession,
-		config:         cfg,
-		state:          stateMgr,
-		sshConfig:      sshCfg,
-		commandTimeout: timeout,
+		sessions:          make(map[string]Session),
+		activeSession:     cfg.Settings.DefaultSession,
+		config:            cfg,
+		state:             stateMgr,
+		sshConfig:         sshCfg,
+		commandTimeout:    timeout,
+		reconnectAttempts: reconnectAttempts,
+		reconnectBackoff:  reconnectBackoff,
 	}
 
 	// Initialize sessions from config
@@ -234,12 +249,64 @@ func (m *Manager) Execute(cmd string) (*ExecuteResult, error) {
 
 	result, err := session.Execute(cmd)
 
+	// For SSH sessions, try to reconnect on connection errors
+	if err != nil && session.Type() == "ssh" {
+		if sessionErr, ok := err.(*Error); ok && sessionErr.Retryable {
+			if sessionErr.Code == ErrSessionDisconnected || sessionErr.Code == ErrConnectionFailed {
+				// Attempt reconnection
+				if reconnectErr := m.attemptReconnect(session); reconnectErr == nil {
+					// Retry the command after successful reconnection
+					result, err = session.Execute(cmd)
+				}
+			}
+		}
+	}
+
 	// Update cwd in state if successful
 	if err == nil && m.state != nil {
 		m.state.SetSessionCWD(session.Name(), session.GetCWD())
 	}
 
 	return result, err
+}
+
+// attemptReconnect attempts to reconnect an SSH session with exponential backoff
+func (m *Manager) attemptReconnect(session Session) error {
+	sshSession, ok := session.(*SSHSession)
+	if !ok {
+		return fmt.Errorf("not an SSH session")
+	}
+
+	var lastErr error
+	backoff := m.reconnectBackoff
+
+	for attempt := 1; attempt <= m.reconnectAttempts; attempt++ {
+		// Wait before retry (except first attempt)
+		if attempt > 1 {
+			time.Sleep(backoff)
+			backoff *= 2 // Exponential backoff
+		}
+
+		// Attempt reconnection
+		if err := sshSession.Reconnect(); err != nil {
+			lastErr = err
+			continue
+		}
+
+		// Update state on successful reconnection
+		if m.state != nil {
+			m.state.SetSessionConnected(session.Name(), true)
+		}
+
+		return nil
+	}
+
+	return &Error{
+		Code:      ErrConnectionFailed,
+		Message:   fmt.Sprintf("Failed to reconnect after %d attempts: %v", m.reconnectAttempts, lastErr),
+		Session:   session.Name(),
+		Retryable: false,
+	}
 }
 
 // ExecuteOn executes a command on a specific session
