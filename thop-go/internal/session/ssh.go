@@ -230,9 +230,16 @@ func (s *SSHSession) executeRawWithContext(ctx context.Context, cmdStr string) (
 	}
 	defer session.Close()
 
-	// Set environment variables
-	for k, v := range s.env {
-		session.Setenv(k, v)
+	// Build environment prefix (export commands)
+	// This is more reliable than session.Setenv which requires server AcceptEnv config
+	if len(s.env) > 0 {
+		var envPrefix strings.Builder
+		for k, v := range s.env {
+			// Escape single quotes in value
+			escapedVal := strings.ReplaceAll(v, "'", "'\\''")
+			envPrefix.WriteString(fmt.Sprintf("export %s='%s'; ", k, escapedVal))
+		}
+		cmdStr = envPrefix.String() + cmdStr
 	}
 
 	// Capture output
@@ -348,6 +355,16 @@ func (s *SSHSession) GetEnv() map[string]string {
 // SetEnv sets an environment variable
 func (s *SSHSession) SetEnv(key, value string) {
 	s.env[key] = value
+}
+
+// RestoreEnv restores environment variables from a map (used after reconnect)
+func (s *SSHSession) RestoreEnv(env map[string]string) {
+	for k, v := range env {
+		s.env[k] = v
+	}
+	if len(env) > 0 {
+		logger.Debug("SSH restored %d environment variable(s) for session %q", len(env), s.name)
+	}
 }
 
 // getAuthMethods returns available authentication methods

@@ -277,9 +277,49 @@ func (a *App) handleSlashCommand(input string) error {
 		os.Exit(0)
 		return nil
 
+	case "/env":
+		return a.cmdEnv(args)
+
 	default:
 		return fmt.Errorf("unknown command: %s (use /help for available commands)", cmd)
 	}
+}
+
+// cmdEnv handles the /env command for setting environment variables
+func (a *App) cmdEnv(args []string) error {
+	sess := a.sessions.GetActiveSession()
+	if sess == nil {
+		return fmt.Errorf("no active session")
+	}
+
+	// No args - show current environment
+	if len(args) == 0 {
+		env := sess.GetEnv()
+		if len(env) == 0 {
+			fmt.Println("No environment variables set")
+		} else {
+			fmt.Println("Environment variables:")
+			for k, v := range env {
+				fmt.Printf("  %s=%s\n", k, v)
+			}
+		}
+		return nil
+	}
+
+	// Parse KEY=VALUE format
+	arg := args[0]
+	if idx := strings.Index(arg, "="); idx > 0 {
+		key := arg[:idx]
+		value := arg[idx+1:]
+		// Use session manager to set and persist
+		if err := a.sessions.SetSessionEnv(key, value); err != nil {
+			return err
+		}
+		fmt.Printf("Set %s=%s\n", key, value)
+		return nil
+	}
+
+	return fmt.Errorf("usage: /env [KEY=VALUE]")
 }
 
 // printSlashHelp prints help for slash commands
@@ -290,6 +330,7 @@ func (a *App) printSlashHelp() {
   /local              Switch to local shell (alias for /switch local)
   /status             Show all sessions
   /close <session>    Close an SSH connection
+  /env [KEY=VALUE]    Show or set environment variables
   /help               Show this help
   /exit               Exit thop
 
@@ -303,7 +344,7 @@ Shortcuts:
 
 Keyboard shortcuts:
   Ctrl+D  Exit
-  Ctrl+C  Cancel current line
+  Ctrl+C  Interrupt running command
   Up/Down History navigation
   Tab     Auto-complete commands`)
 }

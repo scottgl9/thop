@@ -221,6 +221,11 @@ func (m *Manager) Connect(name string) error {
 		m.state.SetSessionConnected(name, true)
 	}
 
+	// Restore environment from state for SSH sessions
+	if sshSession, ok := session.(*SSHSession); ok {
+		m.restoreSessionEnv(sshSession)
+	}
+
 	logger.Info("connected to session %q", name)
 	return nil
 }
@@ -335,6 +340,9 @@ func (m *Manager) attemptReconnect(session Session) error {
 			m.state.SetSessionConnected(session.Name(), true)
 		}
 
+		// Restore environment from state
+		m.restoreSessionEnv(sshSession)
+
 		logger.Info("reconnected to session %q after %d attempt(s)", session.Name(), attempt)
 		return nil
 	}
@@ -346,6 +354,39 @@ func (m *Manager) attemptReconnect(session Session) error {
 		Session:   session.Name(),
 		Retryable: false,
 	}
+}
+
+// restoreSessionEnv restores environment variables from state after reconnect
+func (m *Manager) restoreSessionEnv(session *SSHSession) {
+	if m.state == nil {
+		return
+	}
+
+	env := m.state.GetSessionEnv(session.Name())
+	if len(env) > 0 {
+		session.RestoreEnv(env)
+	}
+}
+
+// SetSessionEnv sets and persists an environment variable for the active session
+func (m *Manager) SetSessionEnv(key, value string) error {
+	session := m.GetActiveSession()
+	if session == nil {
+		return &Error{
+			Code:    ErrSessionNotFound,
+			Message: "No active session",
+		}
+	}
+
+	session.SetEnv(key, value)
+
+	// Persist to state
+	if m.state != nil {
+		m.state.SetSessionEnv(session.Name(), key, value)
+	}
+
+	logger.Debug("set environment %s=%s on session %q", key, value, session.Name())
+	return nil
 }
 
 // ExecuteOn executes a command on a specific session

@@ -109,9 +109,9 @@ After language selection, implement full MVP in chosen language.
 - [x] Configurable max reconnection attempts
 - [x] State recovery after reconnect
 
-### State Persistence
+### State Persistence ✅
 - [x] Persist cwd/env across commands
-- [ ] Replay environment on reconnect
+- [x] Replay environment on reconnect
 - [x] State survives thop restart
 
 ### Command Handling ✅

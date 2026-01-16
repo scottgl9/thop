@@ -238,6 +238,42 @@ func (m *Manager) GetAllSessions() map[string]SessionState {
 	return sessions
 }
 
+// SetSessionEnv sets an environment variable for a session
+func (m *Manager) SetSessionEnv(name, key, value string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if state, ok := m.state.Sessions[name]; ok {
+		if state.Env == nil {
+			state.Env = make(map[string]string)
+		}
+		state.Env[key] = value
+		m.state.Sessions[name] = state
+	} else {
+		m.state.Sessions[name] = SessionState{
+			Env: map[string]string{key: value},
+		}
+	}
+
+	return m.saveWithLock()
+}
+
+// GetSessionEnv returns the environment variables for a session
+func (m *Manager) GetSessionEnv(name string) map[string]string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if state, ok := m.state.Sessions[name]; ok && state.Env != nil {
+		// Return a copy
+		env := make(map[string]string, len(state.Env))
+		for k, v := range state.Env {
+			env[k] = v
+		}
+		return env
+	}
+	return make(map[string]string)
+}
+
 func getCurrentDir() string {
 	dir, err := os.Getwd()
 	if err != nil {
