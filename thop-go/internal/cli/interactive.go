@@ -12,6 +12,7 @@ import (
 
 	"github.com/chzyer/readline"
 	"github.com/scottgl9/thop/internal/session"
+	"golang.org/x/term"
 )
 
 // runInteractive runs the interactive shell mode
@@ -38,6 +39,9 @@ func (a *App) runInteractive() error {
 			readline.PcItemDynamic(a.sessionCompleter()),
 		),
 		readline.PcItem("/close",
+			readline.PcItemDynamic(a.sessionCompleter()),
+		),
+		readline.PcItem("/auth",
 			readline.PcItemDynamic(a.sessionCompleter()),
 		),
 		readline.PcItem("/local"),
@@ -280,6 +284,12 @@ func (a *App) handleSlashCommand(input string) error {
 	case "/env":
 		return a.cmdEnv(args)
 
+	case "/auth":
+		if len(args) == 0 {
+			return fmt.Errorf("usage: /auth <session>")
+		}
+		return a.cmdAuth(args[0])
+
 	default:
 		return fmt.Errorf("unknown command: %s (use /help for available commands)", cmd)
 	}
@@ -330,6 +340,7 @@ func (a *App) printSlashHelp() {
   /local              Switch to local shell (alias for /switch local)
   /status             Show all sessions
   /close <session>    Close an SSH connection
+  /auth <session>     Set password for SSH session
   /env [KEY=VALUE]    Show or set environment variables
   /help               Show this help
   /exit               Exit thop
@@ -445,4 +456,63 @@ func (a *App) cmdClose(name string) error {
 	}
 
 	return nil
+}
+
+// cmdAuth handles the /auth command for password authentication
+func (a *App) cmdAuth(name string) error {
+	if !a.sessions.HasSession(name) {
+		return &session.Error{
+			Code:    session.ErrSessionNotFound,
+			Message: fmt.Sprintf("Session '%s' not found", name),
+			Session: name,
+		}
+	}
+
+	sess, _ := a.sessions.GetSession(name)
+	if sess.Type() != "ssh" {
+		return fmt.Errorf("session '%s' is not an SSH session", name)
+	}
+
+	// Get the SSH session
+	sshSess, ok := sess.(*session.SSHSession)
+	if !ok {
+		return fmt.Errorf("session '%s' is not an SSH session", name)
+	}
+
+	// Prompt for password securely (no echo)
+	fmt.Printf("Password for %s: ", name)
+	password, err := readPassword()
+	if err != nil {
+		return fmt.Errorf("failed to read password: %w", err)
+	}
+	fmt.Println() // Newline after password input
+
+	if password == "" {
+		return fmt.Errorf("password cannot be empty")
+	}
+
+	// Set the password on the session
+	sshSess.SetPassword(password)
+	fmt.Printf("Password set for %s\n", name)
+
+	// If not connected, offer to connect now
+	if !sess.IsConnected() {
+		fmt.Printf("Connecting to %s...\n", name)
+		if err := a.sessions.Connect(name); err != nil {
+			return err
+		}
+		fmt.Printf("Connected to %s\n", name)
+	}
+
+	return nil
+}
+
+// readPassword reads a password from stdin without echoing
+func readPassword() (string, error) {
+	// Use x/term for cross-platform password reading
+	password, err := term.ReadPassword(int(os.Stdin.Fd()))
+	if err != nil {
+		return "", err
+	}
+	return string(password), nil
 }

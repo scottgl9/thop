@@ -130,7 +130,7 @@ After language selection, implement full MVP in chosen language.
 - [x] Startup commands per session
 
 ### Authentication
-- [ ] `/auth <session>` - Provide password interactively
+- [x] `/auth <session>` - Provide password interactively
 - [ ] Password from environment variable
 - [ ] Password from file (0600 perms required)
 - [ ] `/trust <session>` - Trust host key

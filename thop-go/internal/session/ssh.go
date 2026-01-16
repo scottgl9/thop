@@ -23,6 +23,7 @@ type SSHSession struct {
 	port            int
 	user            string
 	keyFile         string
+	password        string // Password for authentication (set via /auth command)
 	jumpHost        string // Jump host for ProxyJump (format: user@host:port or just host)
 	agentForwarding bool   // Whether to forward SSH agent to remote
 	client          *ssh.Client
@@ -508,6 +509,16 @@ func (s *SSHSession) RestoreEnv(env map[string]string) {
 	}
 }
 
+// SetPassword sets the password for authentication
+func (s *SSHSession) SetPassword(password string) {
+	s.password = password
+}
+
+// HasPassword returns true if a password is set
+func (s *SSHSession) HasPassword() bool {
+	return s.password != ""
+}
+
 // getAuthMethods returns available authentication methods
 func (s *SSHSession) getAuthMethods() ([]ssh.AuthMethod, error) {
 	var methods []ssh.AuthMethod
@@ -541,6 +552,12 @@ func (s *SSHSession) getAuthMethods() ([]ssh.AuthMethod, error) {
 				methods = append(methods, keyAuth)
 			}
 		}
+	}
+
+	// Try password authentication if password is set
+	if s.password != "" {
+		methods = append(methods, ssh.Password(s.password))
+		logger.Debug("SSH using password authentication for session %q", s.name)
 	}
 
 	return methods, nil
