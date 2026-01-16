@@ -498,3 +498,22 @@ func (m *Manager) HasSSHConfigHost(name string) bool {
 	}
 	return m.sshConfig.GetHost(name) != nil
 }
+
+// AddSession adds a new session to the manager
+func (m *Manager) AddSession(name string, cfg config.Session) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, exists := m.sessions[name]; exists {
+		return fmt.Errorf("session '%s' already exists", name)
+	}
+
+	m.sessions[name] = m.createSession(name, cfg)
+	logger.Info("added new session %q", name)
+	return nil
+}
+
+// GetConfig returns the current configuration
+func (m *Manager) GetConfig() *config.Config {
+	return m.config
+}

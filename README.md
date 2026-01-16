@@ -234,6 +234,8 @@ With agent forwarding enabled, you can use git over SSH, SSH to other servers, o
 | `/close <session>` | `/d` | Disconnect from SSH session |
 | `/auth <session>` | | Set password for SSH session |
 | `/trust <session>` | | Trust host key for SSH session |
+| `/copy <src> <dst>` | `/cp` | Copy file between sessions |
+| `/add-session <name> <host>` | `/add` | Add new SSH session to config |
 | `/env [KEY=VALUE]` | | Show or set environment variables |
 | `/help` | `/h` | Show help |
 | `/exit` | `/q` | Exit thop |

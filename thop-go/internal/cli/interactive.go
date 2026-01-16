@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"github.com/chzyer/readline"
+	"github.com/scottgl9/thop/internal/config"
 	"github.com/scottgl9/thop/internal/session"
 	"golang.org/x/term"
 )
@@ -49,6 +50,8 @@ func (a *App) runInteractive() error {
 		),
 		readline.PcItem("/copy"),
 		readline.PcItem("/cp"),
+		readline.PcItem("/add-session"),
+		readline.PcItem("/add"),
 		readline.PcItem("/local"),
 		readline.PcItem("/status"),
 		readline.PcItem("/help"),
@@ -307,6 +310,12 @@ func (a *App) handleSlashCommand(input string) error {
 		}
 		return a.cmdCopy(args[0], args[1])
 
+	case "/add-session", "/add":
+		if len(args) < 2 {
+			return fmt.Errorf("usage: /add-session <name> [user@]host[:port]\n  Example: /add-session myserver user@example.com:22")
+		}
+		return a.cmdAddSession(args[0], args[1])
+
 	default:
 		return fmt.Errorf("unknown command: %s (use /help for available commands)", cmd)
 	}
@@ -360,23 +369,29 @@ func (a *App) printSlashHelp() {
   /auth <session>     Set password for SSH session
   /trust <session>    Trust host key for SSH session
   /copy <src> <dst>   Copy file between sessions (session:path format)
+  /add-session <name> <host>  Add new SSH session to config
   /env [KEY=VALUE]    Show or set environment variables
   /help               Show this help
   /exit               Exit thop
 
 Shortcuts:
-  /c   = /connect
-  /sw  = /switch
-  /l   = /local
-  /s   = /status
-  /d   = /close (disconnect)
-  /cp  = /copy
-  /q   = /exit
+  /c    = /connect
+  /sw   = /switch
+  /l    = /local
+  /s    = /status
+  /d    = /close (disconnect)
+  /cp   = /copy
+  /add  = /add-session
+  /q    = /exit
 
 Copy examples:
   /copy local:/path/file remote:/path/file    Upload to active SSH session
   /copy remote:/path/file local:/path/file    Download from active SSH session
   /copy server1:/path/file server2:/path/file Copy between two SSH sessions
+
+Add session examples:
+  /add-session myserver user@example.com      Add SSH session (port 22)
+  /add-session prod deploy@prod.server.com:2222  Add with custom port
 
 Keyboard shortcuts:
   Ctrl+D  Exit
@@ -664,6 +679,82 @@ func (a *App) cmdCopy(src, dst string) error {
 	}
 
 	return fmt.Errorf("unsupported copy operation")
+}
+
+// cmdAddSession handles the /add-session command to add a new SSH session
+func (a *App) cmdAddSession(name, hostSpec string) error {
+	// Check if session already exists
+	if a.sessions.HasSession(name) {
+		return fmt.Errorf("session '%s' already exists", name)
+	}
+
+	// Parse host specification: [user@]host[:port]
+	user, host, port := parseHostSpec(hostSpec)
+
+	// Create session config
+	sessionCfg := config.Session{
+		Type: "ssh",
+		Host: host,
+		User: user,
+		Port: port,
+	}
+
+	// Add to session manager
+	if err := a.sessions.AddSession(name, sessionCfg); err != nil {
+		return err
+	}
+
+	// Add to config and save
+	cfg := a.sessions.GetConfig()
+	if err := cfg.AddSession(name, sessionCfg); err != nil {
+		return err
+	}
+
+	if err := cfg.Save(""); err != nil {
+		return fmt.Errorf("session added but failed to save config: %w", err)
+	}
+
+	fmt.Printf("Added SSH session '%s' (%s@%s", name, user, host)
+	if port != 0 && port != 22 {
+		fmt.Printf(":%d", port)
+	}
+	fmt.Println(")")
+	fmt.Printf("Config saved to %s\n", config.DefaultConfigPath())
+	return nil
+}
+
+// parseHostSpec parses a host specification in the format [user@]host[:port]
+func parseHostSpec(spec string) (user, host string, port int) {
+	// Default values
+	port = 22
+
+	// Check for user@
+	if idx := strings.Index(spec, "@"); idx != -1 {
+		user = spec[:idx]
+		spec = spec[idx+1:]
+	}
+
+	// Check for :port
+	if idx := strings.LastIndex(spec, ":"); idx != -1 {
+		host = spec[:idx]
+		if p, err := fmt.Sscanf(spec[idx+1:], "%d", &port); err != nil || p != 1 {
+			port = 22
+		}
+	} else {
+		host = spec
+	}
+
+	// Default user if not specified
+	if user == "" {
+		// Try to get current user
+		if currentUser := os.Getenv("USER"); currentUser != "" {
+			user = currentUser
+		} else {
+			user = "root"
+		}
+	}
+
+	return user, host, port
 }
 
 // parseFileSpec parses a file specification in the format "session:path" or just "path"

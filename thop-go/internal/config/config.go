@@ -144,6 +144,41 @@ func (c *Config) SessionNames() []string {
 	return names
 }
 
+// AddSession adds a new session to the config
+func (c *Config) AddSession(name string, session Session) error {
+	if _, exists := c.Sessions[name]; exists {
+		return fmt.Errorf("session '%s' already exists", name)
+	}
+	c.Sessions[name] = session
+	return nil
+}
+
+// Save saves the configuration to the specified path
+func (c *Config) Save(path string) error {
+	if path == "" {
+		path = DefaultConfigPath()
+	}
+
+	// Ensure config directory exists
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
+	}
+
+	// Marshal to TOML
+	data, err := toml.Marshal(c)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	// Write to file
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	return nil
+}
+
 func defaultStateFile() string {
 	if val := os.Getenv("THOP_STATE_FILE"); val != "" {
 		return val
