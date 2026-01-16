@@ -1,0 +1,12 @@
+thop (0.1.0-1) unstable; urgency=medium
+
+  * Initial release
+  * Interactive mode with readline support
+  * SSH session management
+  * Proxy mode for AI agent integration
+  * Automatic reconnection with exponential backoff
+  * Environment variable persistence
+  * Startup commands per session
+  * Shell completions for bash, zsh, fish
+
+ -- Scott Glover <scottgl@gmail.com>  Thu, 16 Jan 2026 12:00:00 +0000

@@ -1,0 +1,106 @@
+.TH THOP 1 "January 2026" "thop 0.1.0" "User Commands"
+.SH NAME
+thop \- Terminal Hopper for Agents
+.SH SYNOPSIS
+.B thop
+[\fIOPTIONS\fR]
+.SH DESCRIPTION
+.B thop
+is a CLI tool that enables AI agents to execute commands on remote systems
+via SSH. It provides a shell wrapper architecture with session management,
+automatic reconnection, and context persistence.
+.SH OPTIONS
+.TP
+.B \-\-proxy
+Run in proxy mode (for AI agents). Reads commands from stdin and outputs
+results to stdout.
+.TP
+.B \-c \fICOMMAND\fR
+Execute a single command and exit with its exit code.
+.TP
+.B \-\-status
+Show all sessions and their status, then exit.
+.TP
+.B \-\-config \fIPATH\fR
+Use alternate config file (default: ~/.config/thop/config.toml).
+.TP
+.B \-\-json
+Output in JSON format.
+.TP
+.B \-\-completions \fISHELL\fR
+Generate shell completions (bash, zsh, fish).
+.TP
+.B \-v, \-\-verbose
+Increase logging verbosity.
+.TP
+.B \-q, \-\-quiet
+Suppress non-error output.
+.TP
+.B \-h, \-\-help
+Print help information.
+.TP
+.B \-V, \-\-version
+Print version information.
+.SH INTERACTIVE COMMANDS
+.TP
+.B /connect \fISESSION\fR
+Establish SSH connection to a session.
+.TP
+.B /switch \fISESSION\fR
+Change active context to a session.
+.TP
+.B /local
+Switch to local shell (alias for /switch local).
+.TP
+.B /status
+Show all sessions and their status.
+.TP
+.B /close \fISESSION\fR
+Close SSH connection to a session.
+.TP
+.B /env [\fIKEY=VALUE\fR]
+Show or set environment variables.
+.TP
+.B /help
+Show available commands.
+.SH EXIT CODES
+.TP
+.B 0
+Success
+.TP
+.B 1
+General error
+.TP
+.B 2
+Authentication failed
+.TP
+.B 3
+Host key verification failed
+.SH FILES
+.TP
+.I ~/.config/thop/config.toml
+User configuration file.
+.TP
+.I ~/.local/share/thop/state.json
+Session state file.
+.TP
+.I ~/.local/share/thop/thop.log
+Log file.
+.SH ENVIRONMENT
+.TP
+.B THOP_CONFIG
+Path to config file.
+.TP
+.B THOP_STATE_FILE
+Path to state file.
+.TP
+.B THOP_LOG_LEVEL
+Log level (debug, info, warn, error).
+.TP
+.B THOP_DEFAULT_SESSION
+Default session name.
+.SH AUTHOR
+Scott Glover <scottgl@gmail.com>
+.SH SEE ALSO
+.BR ssh (1),
+.BR ssh_config (5)

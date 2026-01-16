@@ -16,3 +16,8 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+# Debian package build outputs
+*.deb
+*.buildinfo
+*.changes

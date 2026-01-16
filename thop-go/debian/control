@@ -1,0 +1,23 @@
+Source: thop
+Section: utils
+Priority: optional
+Maintainer: Scott Glover <scottgl@gmail.com>
+Build-Depends: debhelper-compat (= 13), golang-go (>= 1.21)
+Standards-Version: 4.6.0
+Homepage: https://github.com/scottgl9/thop
+
+Package: thop
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Terminal Hopper for Agents
+ thop is a CLI tool that enables AI agents to execute commands on remote
+ systems via SSH. It provides a shell wrapper architecture with session
+ management, automatic reconnection, and context persistence.
+ .
+ Features:
+  - Interactive mode with readline support
+  - Proxy mode for AI agent integration
+  - SSH session management with ~/.ssh/config support
+  - Automatic reconnection with exponential backoff
+  - Environment variable persistence across sessions
+  - Configurable startup commands per session

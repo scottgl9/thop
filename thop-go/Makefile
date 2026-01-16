@@ -116,6 +116,13 @@ build-darwin: $(BUILD_DIR)
 .PHONY: build-all
 build-all: build-linux build-darwin
 
+# Debian package
+.PHONY: deb
+deb: clean
+	dpkg-buildpackage -us -uc -b
+	@echo "Debian package built in parent directory"
+	@ls -la ../thop_*.deb 2>/dev/null || true
+
 # Development helpers
 .PHONY: dev
 dev: fmt vet build
@@ -150,6 +157,7 @@ help:
 	@echo "  build-linux  Build for Linux amd64"
 	@echo "  build-darwin Build for macOS (amd64 and arm64)"
 	@echo "  build-all    Build for all platforms"
+	@echo "  deb          Build Debian package"
 	@echo "  dev          Format, vet, and build"
 	@echo "  check        Format, vet, and test"
 	@echo "  help         Show this help"

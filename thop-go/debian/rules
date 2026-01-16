@@ -1,0 +1,26 @@
+#!/usr/bin/make -f
+
+# Disable automatic GOPATH manipulation by dh
+export DH_GOLANG_EXCLUDES :=
+export DH_GOLANG_GO_GENERATE := 0
+export GO111MODULE := on
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	# Skip auto-configure
+
+override_dh_auto_build:
+	go mod download
+	make release VERSION=$(shell dpkg-parsechangelog -S Version | sed 's/-[0-9]*$$//')
+
+override_dh_auto_install:
+	install -D -m 0755 bin/thop debian/thop/usr/bin/thop
+	install -D -m 0644 debian/thop.1 debian/thop/usr/share/man/man1/thop.1
+
+override_dh_auto_clean:
+	make clean || true
+
+override_dh_auto_test:
+	# Skip tests during package build (already run in CI)

@@ -29,3 +29,10 @@ Thumbs.db
 
 # Debug
 __debug_bin
+
+# Debian build artifacts
+debian/.debhelper/
+debian/debhelper-build-stamp
+debian/files
+debian/*.substvars
+debian/thop/
