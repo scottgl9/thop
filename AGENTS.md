@@ -6,136 +6,178 @@ This document provides instructions for AI agents and automated tools contributi
 
 **thop** is a terminal hopper that allows AI agents to execute commands on remote systems seamlessly. It provides:
 
-- Persistent SSH sessions managed by a background daemon
-- Instant context switching between local and remote shells
-- Non-blocking operation (never prompts for input)
-- Transparent proxy mode for AI agent integration
+- Interactive shell wrapper with `(session) $` prompt
+- Slash commands for session management (`/connect`, `/switch`, etc.)
+- Proxy mode (`--proxy`) for AI agent integration
+- State sharing between instances via file
+
+**Architecture**: Shell wrapper (no daemon)
+**Languages**: Evaluating Go and Rust in Phase 0
 
 ## Repository Structure
 
 ```
 thop/
-├── PRD.md          # Product requirements (source of truth)
-├── TODO.md         # Task list derived from PRD
+├── PRD.md          # Product requirements (v0.2.0)
+├── RESEARCH.md     # Architecture research findings
+├── TODO.md         # Task list by phase
 ├── PROGRESS.md     # Completion tracking
-├── CLAUDE.md       # Claude Code-specific instructions
+├── CLAUDE.md       # Claude Code-specific guide
 ├── AGENTS.md       # This file
-├── src/            # Rust source code
-├── tests/          # Test suites
-└── Cargo.toml      # Rust dependencies
+├── thop-go/        # Go prototype (Phase 0)
+│   ├── cmd/
+│   ├── internal/
+│   └── go.mod
+└── thop-rust/      # Rust prototype (Phase 0)
+    ├── src/
+    └── Cargo.toml
 ```
 
 ## Key Documents
 
 | Document | Purpose |
 |----------|---------|
-| `PRD.md` | Complete requirements specification |
-| `TODO.md` | Actionable task list with priorities |
+| `PRD.md` | Complete requirements (v0.2.0 - shell wrapper) |
+| `RESEARCH.md` | Architecture decisions and language evaluation |
+| `TODO.md` | Actionable task list with phases |
 | `PROGRESS.md` | Implementation status tracking |
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────┐
+│  thop (single binary, two modes)    │
+├─────────────────────────────────────┤
+│  Interactive Mode    Proxy Mode     │
+│  - Shows prompt      - SHELL compat │
+│  - Slash commands    - Line-by-line │
+│  - Human UX          - For agents   │
+└────────────┬────────────────────────┘
+             │
+             ▼
+    ┌─────────────────────────┐
+    │ Session Manager         │
+    │ - Local shell           │
+    │ - SSH sessions          │
+    │ - State (cwd, env)      │
+    └─────────────────────────┘
+             │
+     ┌───────┴───────┐
+     ▼               ▼
+  Local           SSH Sessions
+  Shell           (persistent)
+```
 
 ## Development Workflow
 
 ### Before Starting Work
 
-1. Read `PRD.md` for context on requirements
-2. Check `TODO.md` for available tasks
-3. Review `PROGRESS.md` for current status
-4. Identify dependencies between tasks
+1. Read `PRD.md` for requirements context
+2. Check `TODO.md` for current phase tasks
+3. Review `PROGRESS.md` for status
+4. Identify which prototype (Go or Rust) to work on
 
 ### During Development
 
 1. Update `PROGRESS.md` when starting a task
-2. Follow the code patterns in existing files
+2. Follow existing code patterns
 3. Write tests alongside implementation
-4. Keep commits focused and atomic
+4. Keep commits focused
 
 ### After Completing Work
 
 1. Mark task complete in `TODO.md`
-2. Update `PROGRESS.md` with completion status
-3. Run test suite to verify no regressions
+2. Update `PROGRESS.md` with status
+3. Run tests to verify
 
 ## Technical Stack
 
-- **Language**: Rust
-- **IPC**: Unix domain sockets
-- **SSH**: System SSH subprocess (initially)
-- **Config**: TOML format
-- **Logging**: Structured logging to files
+### Go Prototype
+- **Language**: Go 1.21+
+- **SSH**: `golang.org/x/crypto/ssh`
+- **Config**: `github.com/pelletier/go-toml`
+- **State**: JSON file with file locking
 
-## Architecture Guidelines
+### Rust Prototype
+- **Language**: Rust 1.70+
+- **SSH**: `russh` crate
+- **Config**: `toml` crate
+- **Async**: `tokio`
+- **CLI**: `clap`
 
-### Daemon Design
-- Single background process per user
-- Manages all SSH connections
-- Communicates via Unix socket at `$XDG_RUNTIME_DIR/thop.sock`
-- Must handle reconnection automatically
+## Slash Commands
 
-### CLI Design
-- Thin client that sends RPC to daemon
-- Returns structured JSON on errors
-- Exit codes: 0=success, 1=error, 2=auth needed, 3=host key needed
+| Command | Action |
+|---------|--------|
+| `/connect <session>` | Establish SSH connection |
+| `/switch <session>` | Change active context |
+| `/local` | Switch to local shell |
+| `/status` | Show all sessions |
+| `/close <session>` | Close SSH connection |
+| `/help` | Show commands |
 
-### Proxy Mode
-- Primary interface for AI agents
-- Reads from stdin, writes to stdout/stderr
-- Transparent passthrough to active session
-
-## Error Handling Patterns
+## Error Handling
 
 All errors must be:
-1. **Non-blocking** - Return immediately with error info
+1. **Non-blocking** - Return immediately
 2. **Structured** - JSON format with error code
-3. **Actionable** - Include suggestion for resolution
+3. **Actionable** - Include suggestion
 
-Example error response:
 ```json
 {
   "error": true,
   "code": "AUTH_PASSWORD_REQUIRED",
-  "message": "SSH key authentication failed. Password required.",
+  "message": "SSH key authentication failed.",
   "session": "prod",
-  "suggestion": "Run: thop auth prod --password"
+  "suggestion": "Use /auth prod to provide password"
 }
 ```
 
-## Priority Definitions
+## Development Phases
 
-| Priority | Meaning |
-|----------|---------|
-| P0 | Core functionality, must have for MVP |
-| P1 | Important features for usability |
-| P2 | Nice to have, can defer |
+| Phase | Focus |
+|-------|-------|
+| **Phase 0** | Build prototypes in Go and Rust, evaluate |
+| **Phase 1** | Core MVP in chosen language |
+| **Phase 2** | Robustness (reconnection, timeouts) |
+| **Phase 3** | Polish (SSH config, completions) |
+| **Phase 4** | Advanced (PTY, async) |
 
 ## Testing Requirements
 
 ### Unit Tests
-- All parsing logic
-- State management
+- Configuration parsing
+- Slash command parsing
+- Session state management
 - Error handling
 
 ### Integration Tests
-- Daemon communication
-- SSH connections (use Docker)
-- Context switching
+- Local shell execution
+- SSH connections (Docker)
+- State file operations
 
 ### E2E Tests
-- Full workflows with simulated agent
-- Multi-session scenarios
+- Full workflow
+- Proxy mode with AI agent
 
 ## Code Quality Standards
 
-- Idiomatic Rust
-- Public APIs documented
+### Go
+- `gofmt` for formatting
+- `golint` for style
+- No `panic()` in production paths
+- Error wrapping with context
+
+### Rust
+- `rustfmt` for formatting
+- `clippy` for lints
 - No `unwrap()` in production paths
 - Proper error propagation with `?`
-- Logging at appropriate levels
 
 ## Security Requirements
 
 - Never store passwords
-- Unix socket: 0600 permissions
-- Password files: 0600 permissions required
+- State file: 0600 permissions
 - No credentials in logs
 - Never auto-accept host keys
 
@@ -145,20 +187,20 @@ Example error response:
 |--------|--------|
 | Context switch | < 50ms |
 | Command overhead | < 10ms |
-| Daemon memory (idle) | < 50MB |
-| Session memory | < 10MB |
+| Memory (idle) | < 50MB |
+| Per-session memory | < 10MB |
 
 ## Common Mistakes to Avoid
 
-1. **Blocking on user input** - Always return with error instead
+1. **Blocking on input** - Always return error instead
 2. **Storing credentials** - Use SSH agent or per-request auth
-3. **Ignoring host key verification** - Return error, let user decide
-4. **Polling for connection status** - Use event-driven approach
-5. **Tight coupling CLI and daemon** - Keep RPC interface clean
+3. **Auto-accepting host keys** - Security risk
+4. **Ignoring file locks** - Causes state corruption
+5. **Mixing sync/async** - Performance issues
 
 ## Getting Help
 
 - `PRD.md` Section 5: Functional Requirements
-- `PRD.md` Section 6: Non-Functional Requirements
+- `PRD.md` Section 7: Technical Architecture
 - `PRD.md` Section 11: Error Handling
-- `PRD.md` Section 14: Implementation Phases
+- `RESEARCH.md`: Architecture decisions

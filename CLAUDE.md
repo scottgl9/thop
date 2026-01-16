@@ -2,35 +2,75 @@
 
 ## Project Overview
 
-**thop** (Terminal Hopper for Agents) is a CLI tool that enables AI coding agents to seamlessly execute commands on remote systems without managing SSH connections. It maintains persistent SSH sessions in the background and allows instant, non-blocking context switching.
+**thop** (Terminal Hopper for Agents) is a CLI tool that enables AI coding agents to seamlessly execute commands on remote systems. It's an interactive shell wrapper with two modes:
+
+1. **Interactive Mode**: Run `thop` for a shell with `(session) $` prompt and slash commands
+2. **Proxy Mode**: Run `thop --proxy` as `SHELL` for AI agents
 
 ## Core Principle
 
 **Never Block the Agent** - All operations must return immediately. If authentication fails or requires user input, return actionable error information that can be handled programmatically.
 
-## Architecture
+## Architecture (Shell Wrapper - No Daemon)
 
 ```
-┌─────────────┐     ┌─────────────────────────────────────┐
-│ AI Agent    │     │            thopd (daemon)            │
-└──────┬──────┘     │  ┌─────────────────────────────────┐│
-       │            │  │       Session Manager           ││
-       │ stdin/out  │  └──────────────┬──────────────────┘│
-       ▼            │                 │                    │
-┌──────────────┐    │ ┌──────┐    ┌──────┐    ┌──────┐   │
-│    thop      │◄───┼─┤local │    │ prod │    │ stg  │   │
-│    proxy     │    │ │shell │    │(SSH) │    │(SSH) │   │
-└──────────────┘    │ └──────┘    └──────┘    └──────┘   │
-       ▲            └─────────────────────────────────────┘
-       │ Unix Socket
+┌─────────────────────────────────────────────────────────────────┐
+│                    thop (single binary)                         │
+│  ┌─────────────────────┬─────────────────────────────┐         │
+│  │  Interactive Mode   │      Proxy Mode             │         │
+│  │  - (local) $ prompt │  - SHELL compatible         │         │
+│  │  - Slash commands   │  - Line-by-line I/O         │         │
+│  │  - Human UX         │  - For AI agents            │         │
+│  └─────────────────────┴─────────────────────────────┘         │
+│                         │                                       │
+│              ┌──────────┴──────────┐                           │
+│              ▼                     ▼                           │
+│  ┌─────────────────────────────────────────────────┐          │
+│  │           Session Manager                        │          │
+│  │  - Local shell + SSH sessions                   │          │
+│  │  - State tracking (cwd, env)                    │          │
+│  └─────────────────────────────────────────────────┘          │
+└─────────────────────────────────────────────────────────────────┘
 ```
+
+## Implementation Languages
+
+We are evaluating both **Go** and **Rust**. Prototypes in both languages will be built in Phase 0.
+
+### Go Stack
+- SSH: `golang.org/x/crypto/ssh`
+- Config: `github.com/pelletier/go-toml`
+- CLI: Standard library or `cobra`
+
+### Rust Stack
+- SSH: `russh`
+- Config: `toml`
+- CLI: `clap`
+- Async: `tokio`
 
 ## Key Components
 
-1. **Daemon (`thopd`)** - Background process at `$XDG_RUNTIME_DIR/thop.sock`
-2. **CLI (`thop`)** - Thin client communicating with daemon via RPC
-3. **Proxy (`thop proxy`)** - Transparent command passthrough for AI agents
-4. **Session** - Represents a shell context (local or remote)
+### Interactive Mode
+- Default when running `thop` with no arguments
+- Displays prompt: `(local) $` or `(prod) $`
+- Parses slash commands (`/connect`, `/switch`, etc.)
+- Passes regular commands to active session
+
+### Proxy Mode (`thop --proxy`)
+- For AI agent integration via `SHELL` environment variable
+- Reads stdin line-by-line
+- Routes to active session
+- Outputs to stdout/stderr
+
+### Session Manager
+- Manages local shell and SSH sessions
+- Tracks per-session state (cwd, env vars)
+- Handles SSH connection lifecycle
+
+### State File
+- Location: `~/.local/share/thop/state.json`
+- Shares state between thop instances
+- File locking for concurrent access
 
 ## Configuration
 
@@ -40,7 +80,7 @@ Location: `~/.config/thop/config.toml`
 [settings]
 default_session = "local"
 command_timeout = 300
-reconnect_attempts = 5
+log_level = "info"
 
 [sessions.local]
 type = "local"
@@ -52,114 +92,136 @@ host = "prod.example.com"
 user = "deploy"
 ```
 
-## Development Guidelines
+## Slash Commands
 
-### Code Style
-- Use idiomatic Rust patterns
-- Follow the existing project structure
-- Keep functions focused and small
-- Document public APIs
+| Command | Action |
+|---------|--------|
+| `/connect <session>` | Establish SSH connection |
+| `/switch <session>` | Change active context |
+| `/local` | Switch to local shell |
+| `/status` | Show all sessions |
+| `/close <session>` | Close SSH connection |
+| `/help` | Show available commands |
 
-### Testing
-- Write unit tests for all business logic
-- Integration tests for SSH and daemon communication
-- Use Docker containers for SSH test targets
+## Project Structure
 
-### Error Handling
-- Return structured JSON errors to stderr
-- Use specific error codes: `AUTH_PASSWORD_REQUIRED`, `CONNECTION_FAILED`, etc.
-- Include actionable suggestions in error messages
-
-### Performance Targets
-- Context switch: < 50ms
-- Command routing overhead: < 10ms
-- Memory (idle daemon): < 50MB
-- Memory per session: < 10MB
-
-## CLI Commands Reference
-
-| Command | Description |
-|---------|-------------|
-| `thop start` | Start the daemon |
-| `thop stop` | Stop the daemon |
-| `thop status` | Show all sessions |
-| `thop <session>` | Switch context |
-| `thop current` | Print current context |
-| `thop exec <s> <cmd>` | One-off execution |
-| `thop proxy` | Enter proxy mode |
-| `thop auth <s>` | Provide credentials |
-| `thop trust <s>` | Trust host key |
-
-## File Structure
-
+### Go (`thop-go/`)
 ```
-thop/
+thop-go/
+├── cmd/
+│   └── thop/
+│       └── main.go
+├── internal/
+│   ├── cli/
+│   │   ├── interactive.go
+│   │   ├── proxy.go
+│   │   └── commands.go
+│   ├── session/
+│   │   ├── manager.go
+│   │   ├── local.go
+│   │   └── ssh.go
+│   ├── config/
+│   │   └── config.go
+│   └── state/
+│       └── state.go
+├── go.mod
+└── go.sum
+```
+
+### Rust (`thop-rust/`)
+```
+thop-rust/
 ├── src/
-│   ├── main.rs           # CLI entry point
-│   ├── daemon/           # Daemon process
+│   ├── main.rs
+│   ├── cli/
 │   │   ├── mod.rs
-│   │   ├── session.rs    # Session management
-│   │   └── socket.rs     # Unix socket handling
-│   ├── cli/              # CLI commands
+│   │   ├── interactive.rs
+│   │   ├── proxy.rs
+│   │   └── commands.rs
+│   ├── session/
 │   │   ├── mod.rs
-│   │   └── commands/
-│   ├── proxy/            # Proxy mode
-│   ├── config/           # Configuration parsing
-│   └── error/            # Error types
-├── tests/
-│   ├── integration/
-│   └── e2e/
+│   │   ├── manager.rs
+│   │   ├── local.rs
+│   │   └── ssh.rs
+│   ├── config/
+│   │   └── mod.rs
+│   └── state/
+│       └── mod.rs
 ├── Cargo.toml
-├── PRD.md
-├── TODO.md
-├── PROGRESS.md
-└── CLAUDE.md
+└── Cargo.lock
 ```
 
-## Implementation Priorities
+## Development Phases
 
-### P0 (Must Have)
-- Daemon with Unix socket
-- Local session execution
-- SSH session support
-- Context switching
+### Phase 0: Language Evaluation
+Build minimal prototypes in both Go and Rust:
+- Interactive mode with prompt
+- Local shell execution
+- Single SSH session
+- Basic slash commands
 - Proxy mode
-- Non-blocking authentication errors
 
-### P1 (Should Have)
-- Multiple concurrent sessions
-- Automatic reconnection
-- Command timeout handling
-- SSH agent forwarding
+### Phase 1: Core MVP
+Full implementation in chosen language:
+- Complete interactive and proxy modes
+- Multiple sessions
+- State management
+- Configuration parsing
+- Error handling
 
-### P2 (Nice to Have)
-- Jump host support
-- Async command execution
-- Session logs
+### Phase 2-4: Robustness, Polish, Advanced
+See TODO.md for detailed tasks.
 
-## Common Tasks
+## Error Handling
 
-### Adding a New CLI Command
-1. Create command module in `src/cli/commands/`
-2. Register in CLI argument parser
-3. Implement handler that communicates with daemon
-4. Add tests
+Return structured JSON errors:
+```json
+{
+  "error": true,
+  "code": "AUTH_PASSWORD_REQUIRED",
+  "message": "SSH key authentication failed.",
+  "session": "prod",
+  "suggestion": "Use /auth prod to provide password"
+}
+```
 
-### Adding a New Session Type
-1. Implement `Session` trait
-2. Add configuration parsing
-3. Register in session factory
-4. Add integration tests
+Exit codes:
+- 0: Success
+- 1: Error
+- 2: Authentication required
+- 3: Host key verification required
 
-### Debugging
-- Check daemon logs: `~/.local/share/thop/daemon.log`
-- Session logs: `~/.local/share/thop/sessions/<name>.log`
-- Use `THOP_LOG_LEVEL=debug` for verbose output
+## Performance Targets
+
+- Context switch: < 50ms
+- Command overhead: < 10ms
+- Memory (idle): < 50MB
+- Memory per session: < 10MB
 
 ## Security Considerations
 
 - Never store credentials
-- Unix socket with user-only permissions (0600)
+- State file with user-only permissions
 - No sensitive data in logs
 - Never auto-accept host keys
 - Password files require 0600 permissions
+
+## Common Tasks
+
+### Adding a Slash Command
+1. Add to command parser in `commands.go`/`commands.rs`
+2. Implement handler function
+3. Update `/help` output
+4. Add tests
+
+### Adding SSH Feature
+1. Update session manager
+2. Handle in SSH session module
+3. Add configuration option if needed
+4. Test with Docker SSH container
+
+## Debugging
+
+- Set `THOP_LOG_LEVEL=debug` for verbose output
+- Check state file: `cat ~/.local/share/thop/state.json`
+- Test proxy mode: `echo "ls -la" | thop --proxy`

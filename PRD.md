@@ -4,9 +4,10 @@
 
 > *Seamlessly switch between local and remote terminals without interrupting agent flow*
 
-**Version:** 0.1.0  
-**Status:** Draft  
+**Version:** 0.2.0
+**Status:** Revised
 **Last Updated:** January 16, 2026
+**Implementation Language:** Go and Rust (evaluating both)
 
 ---
 
@@ -30,7 +31,13 @@ AI coding agents like Claude Code are powerful but fundamentally local—they ex
 
 ### Solution
 
-thop acts as a transparent proxy layer between the AI agent and the underlying shell(s). The agent executes commands normally, and thop routes them to the appropriate destination (local or remote) based on the current context. Sessions persist in the background, surviving disconnections and allowing instant context switches.
+thop is an interactive shell wrapper with two operating modes:
+
+1. **Interactive Mode**: Run `thop` to get an interactive shell with a `(local) $` prompt. Use slash commands (`/connect`, `/switch`) to manage sessions.
+
+2. **Proxy Mode**: Run `thop --proxy` as the `SHELL` environment variable for AI agents. Commands route transparently to the active session.
+
+The agent executes commands normally, and thop routes them to the appropriate destination (local or remote) based on the current context. Sessions persist within the thop process, and state is shared via a lightweight state file.
 
 ---
 
@@ -250,124 +257,185 @@ thop acts as a transparent proxy layer between the AI agent and the underlying s
 
 ### 7.1 High-Level Architecture
 
+thop is a single binary with two operating modes: Interactive and Proxy.
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                        User's Machine                           │
 │                                                                 │
-│  ┌─────────────┐      ┌─────────────────────────────────────┐  │
-│  │ Claude Code │      │            thopd (daemon)            │  │
-│  │   / AI      │      │  ┌─────────────────────────────────┐│  │
-│  │   Agent     │      │  │       Session Manager           ││  │
-│  └──────┬──────┘      │  └──────────────┬──────────────────┘│  │
-│         │             │                 │                    │  │
-│         │ stdin/out   │    ┌────────────┼────────────┐      │  │
-│         ▼             │    ▼            ▼            ▼      │  │
-│  ┌──────────────┐     │ ┌──────┐    ┌──────┐    ┌──────┐   │  │
-│  │    thop      │◄────┼─┤local │    │ prod │    │ stg  │   │  │
-│  │    proxy     │     │ │shell │    │(SSH) │    │(SSH) │   │  │
-│  └──────────────┘     │ └──────┘    └──┬───┘    └──┬───┘   │  │
-│         ▲             │                │           │        │  │
-│         │ Unix Socket │  ┌─────────────┴───────────┘        │  │
-│         └─────────────┼──┤                                  │  │
-│                       └──┼──────────────────────────────────┘  │
-└──────────────────────────┼─────────────────────────────────────┘
-                           │ SSH connections
-              ┌────────────┴────────────┐
-              ▼                         ▼
-       ┌────────────┐            ┌────────────┐
-       │ Production │            │  Staging   │
-       │   Server   │            │   Server   │
-       └────────────┘            └────────────┘
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │              thop (single binary)                        │   │
+│  │  ┌─────────────────────┬─────────────────────────────┐  │   │
+│  │  │  Interactive Mode   │      Proxy Mode             │  │   │
+│  │  │  - (local) $ prompt │  - SHELL compatible         │  │   │
+│  │  │  - Slash commands   │  - Line-by-line I/O         │  │   │
+│  │  │  - Human UX         │  - For AI agents            │  │   │
+│  │  └─────────────────────┴─────────────────────────────┘  │   │
+│  │                         │                                │   │
+│  │              ┌──────────┴──────────┐                    │   │
+│  │              ▼                     ▼                    │   │
+│  │  ┌─────────────────────────────────────────────────┐   │   │
+│  │  │           Session Manager                        │   │   │
+│  │  │  - Manages SSH connections                       │   │   │
+│  │  │  - Tracks state (cwd, env) per session          │   │   │
+│  │  │  - Handles reconnection                          │   │   │
+│  │  └─────────────────────────────────────────────────┘   │   │
+│  │              │                                          │   │
+│  │      ┌───────┼───────┬───────────┐                     │   │
+│  │      ▼       ▼       ▼           ▼                     │   │
+│  │  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐                  │   │
+│  │  │local │ │ prod │ │ stg  │ │ dev  │                  │   │
+│  │  │shell │ │(SSH) │ │(SSH) │ │(SSH) │                  │   │
+│  │  └──────┘ └──┬───┘ └──┬───┘ └──┬───┘                  │   │
+│  └──────────────┼────────┼────────┼─────────────────────┘   │
+│                 │        │        │                          │
+└─────────────────┼────────┼────────┼──────────────────────────┘
+                  │ SSH    │        │
+       ┌──────────┘        │        └──────────┐
+       ▼                   ▼                   ▼
+┌────────────┐      ┌────────────┐      ┌────────────┐
+│ Production │      │  Staging   │      │    Dev     │
+│   Server   │      │   Server   │      │   Server   │
+└────────────┘      └────────────┘      └────────────┘
 ```
 
 ### 7.2 Component Design
 
-#### 7.2.1 Daemon (`thopd`)
+#### 7.2.1 Interactive Mode (`thop`)
 
-- Long-running background process
-- Manages all SSH connections
-- Maintains session state (cwd, env)
-- Handles reconnection logic
-- Communicates via Unix socket at `$XDG_RUNTIME_DIR/thop.sock`
+- Default mode when running `thop` with no arguments
+- Displays prompt with current context: `(local) $`, `(prod) $`
+- Parses slash commands for session management
+- Full PTY support for interactive commands
+- Signal handling (Ctrl+C forwarded to active session)
 
-#### 7.2.2 CLI (`thop`)
+#### 7.2.2 Proxy Mode (`thop --proxy`)
 
-- Thin client that communicates with daemon
-- All commands are RPC calls to daemon
-- Can operate without daemon for `--help`, `start`, etc.
+- Designed for AI agent integration
+- Set as `SHELL` environment variable: `SHELL="thop --proxy" claude`
+- Line-buffered I/O (reads stdin, writes stdout/stderr)
+- No prompt modification
+- Transparent command passthrough to active session
 
-#### 7.2.3 Proxy (`thop proxy`)
+#### 7.2.3 Session Manager
 
-- Special mode for AI agent integration
-- Reads commands from stdin, writes output to stdout
-- Maintains persistent connection to daemon
-- Transparent passthrough of data
-
-#### 7.2.4 Session
-
-- Represents a single shell context (local or remote)
-- For remote: wraps SSH connection with PTY
-- Tracks: connection state, cwd, environment, history
+- Manages local shell and SSH sessions
+- Tracks per-session state (cwd, environment variables)
+- Handles SSH connection lifecycle
 - Implements reconnection with exponential backoff
+
+#### 7.2.4 State Sharing
+
+- State file at `~/.local/share/thop/state.json`
+- File locking for concurrent access
+- Allows multiple thop instances to share active session
 
 ### 7.3 Data Flow
 
 ```
-Command Execution Flow:
+Interactive Mode Flow:
 ──────────────────────
 
-1. AI Agent writes command to stdin
+1. User types command at (prod) $ prompt
    │
-   ▼
-2. thop proxy reads command
+   ├─► If starts with "/" → Handle as slash command
+   │                         /connect, /switch, /status, etc.
    │
-   ▼
-3. Proxy sends to daemon via Unix socket
-   │
-   ▼
-4. Daemon routes to active session
-   │
-   ├─► [local] Fork and exec in local shell
-   │
-   └─► [remote] Send over SSH channel to remote shell
+   └─► Otherwise → Route to active session
          │
          ▼
-5. Output streams back through same path
+2. Session Manager sends to local shell or SSH
    │
    ▼
-6. Proxy writes to stdout/stderr
+3. Output displayed to user
+
+
+Proxy Mode Flow (AI Agent):
+───────────────────────────
+
+1. AI Agent spawns SHELL (thop --proxy)
    │
    ▼
-7. AI Agent reads output
+2. Agent writes command to stdin
+   │
+   ▼
+3. thop reads line, routes to active session
+   │
+   ├─► [local] Execute in local shell
+   │
+   └─► [remote] Send over SSH channel
+         │
+         ▼
+4. Output streams to stdout/stderr
+   │
+   ▼
+5. AI Agent reads output
 ```
 
 ### 7.4 State Management
 
 ```
-Session State:
-─────────────
-{
-  "name": "prod",
-  "type": "ssh",
-  "host": "prod.example.com",
-  "user": "deploy",
-  "status": "connected",
-  "cwd": "/var/www/app",
-  "env": {
-    "RAILS_ENV": "production"
-  },
-  "connected_at": "2026-01-16T10:30:00Z",
-  "last_command_at": "2026-01-16T14:22:15Z",
-  "reconnect_attempts": 0
-}
-
-Daemon State:
-─────────────
+State File (~/.local/share/thop/state.json):
+────────────────────────────────────────────
 {
   "active_session": "prod",
-  "sessions": { ... },
-  "started_at": "2026-01-16T08:00:00Z"
+  "sessions": {
+    "local": {
+      "type": "local",
+      "cwd": "/home/user/projects",
+      "env": {}
+    },
+    "prod": {
+      "type": "ssh",
+      "host": "prod.example.com",
+      "user": "deploy",
+      "connected": true,
+      "cwd": "/var/www/app",
+      "env": {
+        "RAILS_ENV": "production"
+      }
+    }
+  },
+  "updated_at": "2026-01-16T14:22:15Z"
 }
+```
+
+### 7.5 Slash Commands
+
+| Command | Action |
+|---------|--------|
+| `/connect <session>` | Establish SSH connection to configured session |
+| `/switch <session>` | Change active context |
+| `/local` | Switch to local shell (shortcut for `/switch local`) |
+| `/status` | Show all sessions and connection state |
+| `/close <session>` | Close SSH connection |
+| `/help` | Show available commands |
+
+### 7.6 Project Structure
+
+```
+thop/
+├── cmd/
+│   └── thop/
+│       └── main.go           # Entry point
+├── internal/
+│   ├── cli/
+│   │   ├── interactive.go    # Interactive mode
+│   │   ├── proxy.go          # Proxy mode
+│   │   └── commands.go       # Slash command handlers
+│   ├── session/
+│   │   ├── manager.go        # Session lifecycle management
+│   │   ├── local.go          # Local shell session
+│   │   └── ssh.go            # SSH session (golang.org/x/crypto/ssh)
+│   ├── config/
+│   │   └── config.go         # TOML configuration parsing
+│   └── state/
+│       └── state.go          # Shared state file management
+├── go.mod
+├── go.sum
+├── Makefile
+└── configs/
+    └── example.toml
 ```
 
 ---
@@ -386,7 +454,7 @@ command_timeout = 300
 reconnect_attempts = 5
 reconnect_backoff_base = 2
 log_level = "info"
-socket_path = "$XDG_RUNTIME_DIR/thop.sock"
+state_file = "~/.local/share/thop/state.json"
 
 # Local session (always available)
 [sessions.local]
@@ -425,7 +493,7 @@ user = "admin"
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `THOP_CONFIG` | Path to config file | `~/.config/thop/config.toml` |
-| `THOP_SOCKET` | Path to daemon socket | `$XDG_RUNTIME_DIR/thop.sock` |
+| `THOP_STATE_FILE` | Path to state file | `~/.local/share/thop/state.json` |
 | `THOP_LOG_LEVEL` | Logging verbosity | `info` |
 | `THOP_DEFAULT_SESSION` | Initial active session | `local` |
 
@@ -433,76 +501,78 @@ user = "admin"
 
 ## 9. CLI Reference
 
-### Commands
+### 9.1 Command Line Usage
 
 ```
 thop - Terminal Hopper for Agents
 
 USAGE:
-    thop [COMMAND] [OPTIONS]
-    thop <session>              # Quick switch: thop prod
+    thop [OPTIONS]              # Start interactive mode
+    thop --proxy                # Start proxy mode (for AI agents)
+    thop --status               # Show status and exit
+    thop --version              # Show version and exit
+    thop --help                 # Show help and exit
 
-COMMANDS:
-    <session>       Switch to named session (e.g., thop prod)
-    start           Start the thop daemon
-    stop            Stop the thop daemon
-    status          Show status of all sessions
-    current         Print current active session name
-    exec <s> <cmd>  Execute command in specific session
-    connect <s>     Establish connection to a session
-    close <s>       Close a specific session
-    auth <s>        Provide credentials for a session
-    trust <s>       Trust host key, add to known_hosts
-    proxy           Enter proxy mode (for AI agents)
-    config          Show or edit configuration
-    logs            View daemon and session logs
-    help            Print help information
-    version         Print version
-
-AUTH OPTIONS (for 'thop auth <session>'):
-    --password          Read password from stdin (single line)
-    --password-env VAR  Read from environment variable
-    --password-file F   Read from file (requires 0600 perms)
-    --clear             Clear cached credentials
-
-GLOBAL OPTIONS:
+OPTIONS:
+    --proxy         Run in proxy mode (SHELL compatible)
+    --status        Show all sessions and exit
+    --config <path> Use alternate config file
+    --json          Output in JSON format
     -v, --verbose   Increase logging verbosity
     -q, --quiet     Suppress non-error output
-    --config <path> Use alternate config file
-    --json          Output in JSON format (for agents)
+    -h, --help      Print help information
+    -V, --version   Print version
 
 EXIT CODES:
     0   Success
     1   Error (details in JSON to stderr)
-    2   Authentication required (use 'thop auth')
-    3   Host key verification required (use 'thop trust')
+    2   Authentication required
+    3   Host key verification required
+```
 
-EXAMPLES:
-    # Start daemon
-    thop start
-    
-    # Switch to production (uses SSH key from ~/.ssh automatically)
-    thop prod
-    
-    # If password required, provide it securely:
-    thop auth prod --password-env PROD_PASSWORD  # From env var
-    thop auth prod --password-file ~/.secrets/prod  # From file
-    echo "$pw" | thop auth prod --password  # From stdin
-    
-    # Trust a new host's key (shows fingerprint first)
-    thop trust staging
-    
-    # Check current context
-    thop current
-    
-    # Run one-off command without switching
-    thop exec staging "docker ps"
-    
-    # Return to local shell
-    thop local
-    
-    # Use as shell for AI agent
-    SHELL="thop proxy" claude
+### 9.2 Interactive Mode Slash Commands
+
+When running `thop` in interactive mode, use slash commands:
+
+```
+SLASH COMMANDS (in interactive mode):
+    /connect <session>  Establish SSH connection to session
+    /switch <session>   Change active context
+    /local              Switch to local shell (alias for /switch local)
+    /status             Show all sessions and connection state
+    /close <session>    Close SSH connection
+    /auth <session>     Provide credentials for session
+    /trust <session>    Trust host key, add to known_hosts
+    /help               Show available commands
+
+```
+
+### 9.3 Examples
+
+```bash
+# Start thop in interactive mode
+$ thop
+(local) $ ls -la                    # Commands run locally
+(local) $ /connect prod             # Establish SSH to prod
+Connecting to prod (prod.example.com)... connected
+(local) $ /switch prod              # Switch context to prod
+(prod) $ pwd                        # Commands now run on prod
+/var/www/app
+(prod) $ docker ps                  # Run commands remotely
+(prod) $ /local                     # Switch back to local
+(local) $ /status                   # Show all sessions
+Sessions:
+  local   [active] /home/user/projects
+  prod    [connected] /var/www/app
+
+# If password required:
+(local) $ /auth prod                # Will prompt for password
+
+# Trust a new host (shows fingerprint):
+(local) $ /trust staging
+
+# Use as shell for AI agent
+$ SHELL="thop --proxy" claude
 ```
 
 ---
@@ -511,29 +581,33 @@ EXAMPLES:
 
 ### 10.1 Claude Code Integration
 
-**Option A: Shell Replacement**
+**Recommended: SHELL Override**
 ```bash
-# In .bashrc or before starting Claude Code
-export SHELL="$(which thop) proxy"
-claude
+# Terminal 1: Setup thop session
+$ thop
+(local) $ /connect prod
+(local) $ /switch prod
+(prod) $                          # Leave running
+
+# Terminal 2: Start Claude with thop as SHELL
+$ SHELL="thop --proxy" claude     # Claude's commands go through thop
 ```
 
-**Option B: Wrapper Script**
+**Alternative: Wrapper Script**
 ```bash
 #!/bin/bash
-# ~/bin/claude-remote
-thop start
-thop "${1:-local}"
-claude
+# ~/bin/claude-thop
+export SHELL="$(which thop) --proxy"
+exec claude "$@"
 ```
 
-**Option C: Claude Code MCP (Future)**
+**Future: Claude Code MCP**
 ```json
 {
   "mcpServers": {
     "thop": {
       "command": "thop",
-      "args": ["mcp-server"]
+      "args": ["--mcp-server"]
     }
   }
 }
@@ -541,25 +615,45 @@ claude
 
 ### 10.2 Generic AI Agent Integration
 
-Any AI agent that executes shell commands can use thop:
+Any AI agent that executes shell commands can use thop by setting SHELL:
 
 ```python
 import subprocess
+import os
 
-# Start daemon once
-subprocess.run(["thop", "start"])
+# Set thop as the shell for subprocesses
+os.environ["SHELL"] = "thop --proxy"
 
-# Switch context
-subprocess.run(["thop", "prod"])
-
-# Execute commands - they go to prod automatically
+# Execute commands - they route to the active thop session
 result = subprocess.run(
-    ["thop", "proxy"],
+    ["thop", "--proxy"],
     input="ls -la\n",
     capture_output=True,
     text=True
 )
 print(result.stdout)
+```
+
+### 10.3 Workflow
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  1. User starts thop in Terminal 1                               │
+│     $ thop                                                       │
+│     (local) $ /connect prod                                      │
+│     (local) $ /switch prod                                       │
+│     (prod) $                                                     │
+│                                                                  │
+│  2. User starts AI agent with thop as SHELL in Terminal 2       │
+│     $ SHELL="thop --proxy" claude                               │
+│                                                                  │
+│  3. AI agent commands flow through thop to prod server          │
+│     Claude: "Run ls -la"                                        │
+│     → thop --proxy receives "ls -la"                            │
+│     → Routes to active session (prod)                           │
+│     → SSH executes on prod.example.com                          │
+│     → Output returned to Claude                                  │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -580,7 +674,7 @@ print(result.stdout)
 | Timeout | `COMMAND_TIMEOUT` | Command exceeded timeout | Kill command, return timeout error |
 | Session | `SESSION_NOT_FOUND` | Unknown session name | Return error, list available sessions |
 | Session | `SESSION_DISCONNECTED` | Session lost connection | Attempt reconnect or return error |
-| Daemon | `DAEMON_NOT_RUNNING` | Daemon not started | Auto-start or return clear error |
+| State | `STATE_FILE_ERROR` | Cannot read/write state | Return error with path info |
 
 ### 11.2 Error Response Format
 
@@ -691,38 +785,69 @@ When connecting to a session that requires a password:
 
 ## 14. Implementation Phases
 
-### Phase 1: Core MVP (Weeks 1-3)
+### Phase 0: Language Evaluation
 
-- [ ] Daemon process with Unix socket communication
-- [ ] Local session execution
+Implement minimal prototype in both Go and Rust to evaluate:
+
+**Go Prototype (`thop-go/`)**
+- [ ] Basic interactive mode with prompt
+- [ ] Local shell command execution
+- [ ] Single SSH session using `golang.org/x/crypto/ssh`
+- [ ] Slash command parsing (`/connect`, `/switch`, `/status`)
+- [ ] Proxy mode (`--proxy`)
+
+**Rust Prototype (`thop-rust/`)**
+- [ ] Basic interactive mode with prompt
+- [ ] Local shell command execution
+- [ ] Single SSH session using `russh` crate
+- [ ] Slash command parsing (`/connect`, `/switch`, `/status`)
+- [ ] Proxy mode (`--proxy`)
+
+**Evaluation Criteria:**
+- Code complexity and maintainability
+- Binary size and startup time
+- SSH library ergonomics
+- PTY handling ease
+- Developer experience
+
+### Phase 1: Core MVP
+
+After language selection:
+
+- [ ] Interactive mode with `(session) $` prompt
+- [ ] Local shell session management
 - [ ] Single SSH session support
-- [ ] Basic `start`, `stop`, `status`, `switch` commands
-- [ ] Proxy mode for stdin/stdout passthrough
-- [ ] Configuration file parsing
+- [ ] Slash commands: `/connect`, `/switch`, `/local`, `/status`, `/close`
+- [ ] Proxy mode (`--proxy`) for AI agents
+- [ ] State file for session sharing
+- [ ] Configuration file parsing (TOML)
+- [ ] Basic error handling with JSON output
 
-### Phase 2: Robustness (Weeks 4-5)
+### Phase 2: Robustness
 
 - [ ] Multiple concurrent SSH sessions
-- [ ] Automatic reconnection with backoff
-- [ ] Session state persistence (cwd, env)
+- [ ] Automatic reconnection with exponential backoff
+- [ ] Session state persistence (cwd, env vars)
 - [ ] Command timeout handling
-- [ ] `exec` command for one-off execution
+- [ ] File locking for concurrent state access
+- [ ] Signal handling (Ctrl+C forwarding)
 
-### Phase 3: Polish (Weeks 6-7)
+### Phase 3: Polish
 
-- [ ] SSH config file integration
-- [ ] Jump host support
+- [ ] SSH config file integration (`~/.ssh/config`)
+- [ ] SSH key and agent support
+- [ ] Jump host / bastion support
 - [ ] Startup commands per session
 - [ ] Logging infrastructure
-- [ ] Error messages and suggestions
+- [ ] `/auth` and `/trust` commands
 - [ ] Shell completions (bash, zsh, fish)
 
-### Phase 4: Advanced Features (Weeks 8+)
+### Phase 4: Advanced Features
 
+- [ ] PTY support for interactive commands
 - [ ] Async command execution
-- [ ] Command interruption (Ctrl+C)
-- [ ] Session sharing (optional)
-- [ ] MCP server wrapper
+- [ ] Command history per session
+- [ ] MCP server wrapper (future)
 - [ ] Metrics and observability
 
 ---
@@ -730,9 +855,8 @@ When connecting to a session that requires a password:
 ## 15. Open Questions
 
 1. **Q: Should thop manage its own SSH connections or delegate to system SSH?**
-   - Option A: Use `ssh` subprocess (simpler, relies on system config)
-   - Option B: Use SSH library like `libssh` (more control, but complex)
-   - **Recommendation**: Start with subprocess, consider library later
+   - **Decision**: Use native SSH library (Go: `golang.org/x/crypto/ssh`, Rust: `russh`)
+   - Provides more control over connection lifecycle and non-blocking behavior
 
 2. **Q: How to handle long-running commands that exceed timeout?**
    - Option A: Kill and return error
@@ -743,7 +867,14 @@ When connecting to a session that requires a password:
    - **Recommendation**: Not in initial release, evaluate demand later
 
 4. **Q: How to handle session-specific environment without polluting global state?**
-   - **Recommendation**: Track env changes per session, replay on reconnect
+   - **Decision**: Track env changes per session in state file, replay on reconnect
+
+5. **Q: Daemon vs shell wrapper architecture?**
+   - **Decision**: Shell wrapper approach (no daemon)
+   - Simpler architecture, single binary, state shared via file
+
+6. **Q: Go vs Rust for implementation?**
+   - **Decision**: Prototype both, evaluate based on criteria in Phase 0
 
 ---
 

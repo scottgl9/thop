@@ -1,146 +1,236 @@
 # thop TODO List
 
-Tasks derived from PRD.md. See PROGRESS.md for completion tracking.
+Tasks derived from PRD.md (v0.2.0 - Shell Wrapper Architecture).
+See PROGRESS.md for completion tracking.
+
+---
+
+## Phase 0: Language Evaluation
+
+Implement minimal prototypes in both Go and Rust to compare.
+
+### Go Prototype (`thop-go/`)
+
+#### Project Setup
+- [ ] Initialize Go module (`go mod init`)
+- [ ] Add dependencies: `golang.org/x/crypto/ssh`, `github.com/pelletier/go-toml`
+- [ ] Create project structure (`cmd/`, `internal/`)
+
+#### Interactive Mode
+- [ ] Implement main loop with `(session) $` prompt
+- [ ] Parse user input for slash commands vs regular commands
+- [ ] Display output from command execution
+
+#### Local Shell
+- [ ] Execute commands in local shell subprocess
+- [ ] Capture stdout/stderr
+- [ ] Return exit codes
+
+#### SSH Session
+- [ ] Establish SSH connection using `golang.org/x/crypto/ssh`
+- [ ] Execute commands over SSH channel
+- [ ] Handle authentication (key-based)
+- [ ] Return `AUTH_PASSWORD_REQUIRED` error when needed
+
+#### Slash Commands
+- [ ] `/connect <session>` - Establish SSH connection
+- [ ] `/switch <session>` - Change active context
+- [ ] `/local` - Switch to local shell
+- [ ] `/status` - Show all sessions
+- [ ] `/help` - Show available commands
+
+#### Proxy Mode
+- [ ] `--proxy` flag to run in proxy mode
+- [ ] Read commands from stdin line-by-line
+- [ ] Route to active session
+- [ ] Output to stdout/stderr
+
+#### Configuration
+- [ ] Parse `~/.config/thop/config.toml`
+- [ ] Load session definitions
+
+---
+
+### Rust Prototype (`thop-rust/`)
+
+#### Project Setup
+- [ ] Initialize Cargo project (`cargo init`)
+- [ ] Add dependencies: `russh`, `toml`, `clap`, `tokio`
+- [ ] Create project structure (`src/`)
+
+#### Interactive Mode
+- [ ] Implement main loop with `(session) $` prompt
+- [ ] Parse user input for slash commands vs regular commands
+- [ ] Display output from command execution
+
+#### Local Shell
+- [ ] Execute commands in local shell subprocess
+- [ ] Capture stdout/stderr
+- [ ] Return exit codes
+
+#### SSH Session
+- [ ] Establish SSH connection using `russh`
+- [ ] Execute commands over SSH channel
+- [ ] Handle authentication (key-based)
+- [ ] Return `AUTH_PASSWORD_REQUIRED` error when needed
+
+#### Slash Commands
+- [ ] `/connect <session>` - Establish SSH connection
+- [ ] `/switch <session>` - Change active context
+- [ ] `/local` - Switch to local shell
+- [ ] `/status` - Show all sessions
+- [ ] `/help` - Show available commands
+
+#### Proxy Mode
+- [ ] `--proxy` flag to run in proxy mode
+- [ ] Read commands from stdin line-by-line
+- [ ] Route to active session
+- [ ] Output to stdout/stderr
+
+#### Configuration
+- [ ] Parse `~/.config/thop/config.toml`
+- [ ] Load session definitions
+
+---
+
+### Evaluation Criteria
+- [ ] Compare code complexity and lines of code
+- [ ] Measure binary size
+- [ ] Measure startup time
+- [ ] Evaluate SSH library ergonomics
+- [ ] Document developer experience
+- [ ] Make language selection decision
+
+---
 
 ## Phase 1: Core MVP
 
-### Daemon Infrastructure
-- [ ] Create daemon process structure with graceful startup/shutdown
-- [ ] Implement Unix socket server at `$XDG_RUNTIME_DIR/thop.sock`
-- [ ] Design and implement RPC protocol for CLI-daemon communication
-- [ ] Add daemon auto-restart on crash
-- [ ] Implement socket permission handling (user-only access)
+After language selection, implement full MVP in chosen language.
+
+### Interactive Mode
+- [ ] Full interactive shell with `(session) $` prompt
+- [ ] Readline support (history, line editing)
+- [ ] Proper terminal handling
+- [ ] Graceful exit on Ctrl+D
 
 ### Local Session
-- [ ] Implement local shell session management
-- [ ] Handle command execution with stdin/stdout/stderr
-- [ ] Preserve exit codes from executed commands
-- [ ] Track current working directory across commands
-- [ ] Track environment variables across commands
+- [ ] Local shell session management
+- [ ] Track current working directory
+- [ ] Track environment variables
+- [ ] Persist state across commands
 
-### SSH Session (Single)
-- [ ] Implement SSH connection using system `ssh` subprocess
-- [ ] Integrate with `~/.ssh/config` host aliases (FR1.7)
-- [ ] Support SSH key authentication from `~/.ssh/` (FR1.8, FR2.1)
-- [ ] Respect `IdentityFile` settings in SSH config (FR2.2)
-- [ ] Use running ssh-agent if available (FR2.3)
-- [ ] Return `AUTH_PASSWORD_REQUIRED` error when password needed (FR2.5)
-- [ ] Return `HOST_KEY_VERIFICATION_FAILED` error for unknown hosts (FR2.11)
-- [ ] Never block or prompt for password input (FR2.4)
+### SSH Session
+- [ ] SSH connection establishment
+- [ ] Integrate with `~/.ssh/config` host aliases
+- [ ] Support SSH key authentication from `~/.ssh/`
+- [ ] Respect `IdentityFile` settings
+- [ ] Use ssh-agent if available
+- [ ] Non-blocking authentication (return error, don't prompt)
 
-### CLI Commands (Basic)
-- [ ] `thop start` - Start the daemon (FR5.1)
-- [ ] `thop stop` - Stop the daemon (FR5.2)
-- [ ] `thop status` - Show all sessions and state (FR5.3)
-- [ ] `thop <session>` - Switch active context (FR5.4, FR3.1)
-- [ ] `thop local` - Return to local shell (FR3.2)
-- [ ] `thop current` - Print current context name (FR5.5, FR3.6)
+### Slash Commands
+- [ ] `/connect <session>` - Full implementation
+- [ ] `/switch <session>` - Full implementation
+- [ ] `/local` - Shortcut for `/switch local`
+- [ ] `/status` - Show all sessions with state
+- [ ] `/close <session>` - Close SSH connection
+- [ ] `/help` - Show all commands with descriptions
 
 ### Proxy Mode
-- [ ] `thop proxy` - Enter proxy mode reading from stdin (FR6.1)
-- [ ] Pass commands to active session transparently (FR6.2)
-- [ ] Output session stdout/stderr to own stdout/stderr (FR6.3)
-- [ ] Maintain persistent connection to daemon
+- [ ] `thop --proxy` for AI agent integration
+- [ ] SHELL-compatible execution
+- [ ] Line-buffered stdin reading
+- [ ] stdout/stderr passthrough
+- [ ] Exit code preservation
+
+### State Management
+- [ ] State file at `~/.local/share/thop/state.json`
+- [ ] Active session tracking
+- [ ] Per-session state (cwd, env)
+- [ ] File locking for concurrent access
 
 ### Configuration
-- [ ] Parse `~/.config/thop/config.toml` configuration file (FR1.2)
-- [ ] Support global settings (timeout, log level, socket path)
-- [ ] Support local session configuration
-- [ ] Support SSH session configuration
-- [ ] Environment variable overrides (THOP_CONFIG, THOP_SOCKET, etc.)
+- [ ] Parse `~/.config/thop/config.toml`
+- [ ] Global settings (timeout, log level)
+- [ ] Session definitions (local, SSH)
+- [ ] Environment variable overrides
 
 ### Error Handling
-- [ ] Define structured JSON error format
-- [ ] Implement error codes (CONNECTION_FAILED, AUTH_*, SESSION_*, etc.)
-- [ ] Exit code mapping (0=success, 1=error, 2=auth, 3=host key)
-- [ ] Include actionable suggestions in error messages
+- [ ] Structured JSON error format
+- [ ] Error codes: `CONNECTION_FAILED`, `AUTH_*`, `SESSION_*`
+- [ ] Exit codes: 0=success, 1=error, 2=auth, 3=host key
+- [ ] Actionable error suggestions
 
 ---
 
 ## Phase 2: Robustness
 
 ### Multiple Sessions
-- [ ] Support multiple concurrent SSH sessions (G5)
+- [ ] Support multiple concurrent SSH sessions
 - [ ] Session isolation (independent state per session)
-- [ ] Session listing in `thop status`
+- [ ] Session listing with connection status
 
 ### Reconnection
-- [ ] Implement automatic reconnection on connection failure (FR1.4)
-- [ ] Exponential backoff for reconnection attempts
-- [ ] Configurable max reconnection attempts (FR1.5, default: 5)
-- [ ] Session recovery preserving cwd and environment
+- [ ] Automatic reconnection on connection failure
+- [ ] Exponential backoff for retries
+- [ ] Configurable max reconnection attempts
+- [ ] State recovery after reconnect
 
 ### State Persistence
-- [ ] Persist shell state (cwd, env vars) across commands (FR4.4, G6)
-- [ ] Replay environment on reconnection
-- [ ] Context persistence across thop restarts (FR3.5)
+- [ ] Persist cwd/env across commands
+- [ ] Replay environment on reconnect
+- [ ] State survives thop restart
 
 ### Command Handling
-- [ ] Configurable command timeout (FR4.6, default: 300s)
+- [ ] Configurable command timeout (default: 300s)
 - [ ] Kill and report on timeout
-- [ ] `thop exec <session> "<command>"` - One-off execution (FR5.6)
-
-### Additional CLI Commands
-- [ ] `thop connect <session>` - Establish connection (FR5.7)
-- [ ] `thop close <session>` - Close specific session (FR5.8)
+- [ ] Signal forwarding (Ctrl+C to active session)
 
 ---
 
 ## Phase 3: Polish
 
 ### SSH Integration
-- [ ] Full SSH config file parsing and integration
-- [ ] SSH agent forwarding support (FR1.9)
-- [ ] Jump host / bastion server support (FR1.10)
+- [ ] Full `~/.ssh/config` parsing
+- [ ] SSH agent forwarding support
+- [ ] Jump host / bastion support
 - [ ] Startup commands per session
 
-### Authentication Commands
-- [ ] `thop auth <session> --password` - Read password from stdin (FR2.6)
-- [ ] `thop auth <session> --password-env VAR` - From env var (FR2.7)
-- [ ] `thop auth <session> --password-file PATH` - From file (FR2.8)
-- [ ] Validate file permissions (0600 required)
-- [ ] `thop auth <session> --clear` - Clear cached credentials (FR2.10)
-- [ ] Credential timeout (configurable, default: 1 hour) (FR2.9)
-- [ ] `thop trust <session>` - Add host key to known_hosts (FR5.10, FR2.12)
-- [ ] Display host key fingerprint before trusting
+### Authentication
+- [ ] `/auth <session>` - Provide password interactively
+- [ ] Password from environment variable
+- [ ] Password from file (0600 perms required)
+- [ ] `/trust <session>` - Trust host key
+- [ ] Display fingerprint before trusting
 
 ### Logging
-- [ ] Daemon logging to `~/.local/share/thop/daemon.log`
-- [ ] Session logging to `~/.local/share/thop/sessions/<name>.log`
+- [ ] Log file at `~/.local/share/thop/thop.log`
 - [ ] Configurable log levels
-- [ ] `thop logs [session]` - View logs (FR5.11)
-- [ ] No sensitive data in logs (NFR3.3)
+- [ ] No sensitive data in logs
 
 ### CLI Polish
-- [ ] `thop config` - Edit/view configuration (FR5.12)
+- [ ] `--status` flag to show status and exit
+- [ ] `--json` flag for machine-readable output
+- [ ] `-v/--verbose` and `-q/--quiet` flags
 - [ ] Shell completions for bash
 - [ ] Shell completions for zsh
 - [ ] Shell completions for fish
-- [ ] `--json` flag for machine-readable output
-- [ ] `-v/--verbose` and `-q/--quiet` flags
-
-### Proxy Enhancements
-- [ ] Handle special `#thop` commands in proxy mode (FR6.4)
-- [ ] Support use as SHELL environment variable (FR6.5)
 
 ---
 
 ## Phase 4: Advanced Features
 
-### Interactive & Async
-- [ ] PTY support for interactive commands (FR4.5)
-- [ ] Async command execution with status polling (FR4.7)
-- [ ] Command interruption / Ctrl+C forwarding (FR4.8)
-- [ ] Automatic transition to async for long commands
+### Interactive Improvements
+- [ ] PTY support for interactive commands (vim, top)
+- [ ] Window resize handling (SIGWINCH)
+- [ ] Command history per session
 
-### Configuration Enhancements
-- [ ] Ad-hoc session creation via CLI (FR1.3)
-- [ ] Session timeout for idle connections (FR1.6)
+### Async Features
+- [ ] Async command execution
+- [ ] Background command with status polling
 
-### Future Considerations
+### Future
 - [ ] MCP server wrapper
 - [ ] Metrics and observability
-- [ ] Session sharing (optional)
 
 ---
 
@@ -149,27 +239,24 @@ Tasks derived from PRD.md. See PROGRESS.md for completion tracking.
 ### Unit Tests
 - [ ] Configuration parsing tests
 - [ ] Session state management tests
-- [ ] Command routing logic tests
-- [ ] Reconnection backoff calculation tests
+- [ ] Slash command parsing tests
 - [ ] Error handling tests
 
 ### Integration Tests
 - [ ] Local shell execution tests
-- [ ] SSH connection tests (with Docker)
+- [ ] SSH connection tests (Docker)
 - [ ] Context switching tests
-- [ ] Command timeout handling tests
-- [ ] Reconnection tests (network simulation)
+- [ ] State file tests
 
 ### E2E Tests
 - [ ] Full workflow with mock AI agent
 - [ ] Multi-session scenarios
-- [ ] Long-running command handling
-- [ ] Stress testing with rapid context switches
+- [ ] Proxy mode with Claude Code
 
 ### Test Infrastructure
 - [ ] Docker containers for SSH test targets
-- [ ] Network simulation for disconnect testing
 - [ ] CI pipeline configuration
+- [ ] Test coverage reporting
 
 ---
 
@@ -179,15 +266,14 @@ Tasks derived from PRD.md. See PROGRESS.md for completion tracking.
 - [ ] Installation instructions
 - [ ] Configuration reference
 - [ ] Integration guide for Claude Code
-- [ ] Integration guide for other AI agents
 - [ ] Troubleshooting guide
 
 ---
 
 ## Priority Legend
 
-Tasks are organized by implementation phase from PRD Section 14:
-- **Phase 1**: Core MVP - Essential for first working version
-- **Phase 2**: Robustness - Production-ready reliability
-- **Phase 3**: Polish - User experience improvements
+- **Phase 0**: Language evaluation - Compare Go and Rust
+- **Phase 1**: Core MVP - Minimum viable product
+- **Phase 2**: Robustness - Production reliability
+- **Phase 3**: Polish - User experience
 - **Phase 4**: Advanced - Extended capabilities

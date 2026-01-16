@@ -1,227 +1,213 @@
 # thop Implementation Progress
 
+**Architecture**: Shell Wrapper (v0.2.0)
+**Languages**: Evaluating Go and Rust
+
 ## Overview
 
 | Phase | Status | Progress |
 |-------|--------|----------|
+| Phase 0: Language Evaluation | Not Started | 0% |
 | Phase 1: Core MVP | Not Started | 0% |
 | Phase 2: Robustness | Not Started | 0% |
 | Phase 3: Polish | Not Started | 0% |
 | Phase 4: Advanced | Not Started | 0% |
 | Testing | Not Started | 0% |
-| Documentation | Not Started | 0% |
+| Documentation | In Progress | 50% |
 
-**Overall Progress**: 0%
+**Overall Progress**: 5%
+
+---
+
+## Phase 0: Language Evaluation
+
+### Go Prototype (`thop-go/`)
+
+#### Project Setup
+| Task | Status | Notes |
+|------|--------|-------|
+| Initialize Go module | Not Started | |
+| Add dependencies | Not Started | |
+| Create project structure | Not Started | |
+
+#### Interactive Mode
+| Task | Status | Notes |
+|------|--------|-------|
+| Main loop with prompt | Not Started | |
+| Slash command parsing | Not Started | |
+| Output display | Not Started | |
+
+#### Local Shell
+| Task | Status | Notes |
+|------|--------|-------|
+| Command execution | Not Started | |
+| Capture stdout/stderr | Not Started | |
+| Exit code handling | Not Started | |
+
+#### SSH Session
+| Task | Status | Notes |
+|------|--------|-------|
+| SSH connection | Not Started | |
+| Command execution | Not Started | |
+| Key authentication | Not Started | |
+| Auth error handling | Not Started | |
+
+#### Slash Commands
+| Task | Status | Notes |
+|------|--------|-------|
+| `/connect` | Not Started | |
+| `/switch` | Not Started | |
+| `/local` | Not Started | |
+| `/status` | Not Started | |
+| `/help` | Not Started | |
+
+#### Proxy Mode
+| Task | Status | Notes |
+|------|--------|-------|
+| `--proxy` flag | Not Started | |
+| Stdin reading | Not Started | |
+| Session routing | Not Started | |
+| Output handling | Not Started | |
+
+#### Configuration
+| Task | Status | Notes |
+|------|--------|-------|
+| TOML parsing | Not Started | |
+| Session loading | Not Started | |
+
+---
+
+### Rust Prototype (`thop-rust/`)
+
+#### Project Setup
+| Task | Status | Notes |
+|------|--------|-------|
+| Initialize Cargo project | Not Started | |
+| Add dependencies | Not Started | |
+| Create project structure | Not Started | |
+
+#### Interactive Mode
+| Task | Status | Notes |
+|------|--------|-------|
+| Main loop with prompt | Not Started | |
+| Slash command parsing | Not Started | |
+| Output display | Not Started | |
+
+#### Local Shell
+| Task | Status | Notes |
+|------|--------|-------|
+| Command execution | Not Started | |
+| Capture stdout/stderr | Not Started | |
+| Exit code handling | Not Started | |
+
+#### SSH Session
+| Task | Status | Notes |
+|------|--------|-------|
+| SSH connection | Not Started | |
+| Command execution | Not Started | |
+| Key authentication | Not Started | |
+| Auth error handling | Not Started | |
+
+#### Slash Commands
+| Task | Status | Notes |
+|------|--------|-------|
+| `/connect` | Not Started | |
+| `/switch` | Not Started | |
+| `/local` | Not Started | |
+| `/status` | Not Started | |
+| `/help` | Not Started | |
+
+#### Proxy Mode
+| Task | Status | Notes |
+|------|--------|-------|
+| `--proxy` flag | Not Started | |
+| Stdin reading | Not Started | |
+| Session routing | Not Started | |
+| Output handling | Not Started | |
+
+#### Configuration
+| Task | Status | Notes |
+|------|--------|-------|
+| TOML parsing | Not Started | |
+| Session loading | Not Started | |
+
+---
+
+### Evaluation
+| Task | Status | Notes |
+|------|--------|-------|
+| Code complexity comparison | Not Started | |
+| Binary size measurement | Not Started | |
+| Startup time measurement | Not Started | |
+| SSH library evaluation | Not Started | |
+| Developer experience notes | Not Started | |
+| Language selection decision | Not Started | |
 
 ---
 
 ## Phase 1: Core MVP
 
-### Daemon Infrastructure
-| Task | Status | Notes |
-|------|--------|-------|
-| Daemon process structure | Not Started | |
-| Unix socket server | Not Started | |
-| RPC protocol | Not Started | |
-| Auto-restart on crash | Not Started | |
-| Socket permissions | Not Started | |
+*Blocked until Phase 0 complete and language selected*
 
-### Local Session
-| Task | Status | Notes |
-|------|--------|-------|
-| Local shell management | Not Started | |
-| Command execution | Not Started | |
-| Exit code preservation | Not Started | |
-| CWD tracking | Not Started | |
-| Env var tracking | Not Started | |
-
-### SSH Session
-| Task | Status | Notes |
-|------|--------|-------|
-| SSH subprocess connection | Not Started | |
-| SSH config integration | Not Started | |
-| SSH key auth | Not Started | |
-| IdentityFile support | Not Started | |
-| ssh-agent support | Not Started | |
-| AUTH_PASSWORD_REQUIRED error | Not Started | |
-| HOST_KEY_VERIFICATION error | Not Started | |
-| Non-blocking auth | Not Started | |
-
-### CLI Commands (Basic)
-| Task | Status | Notes |
-|------|--------|-------|
-| `thop start` | Not Started | |
-| `thop stop` | Not Started | |
-| `thop status` | Not Started | |
-| `thop <session>` | Not Started | |
-| `thop local` | Not Started | |
-| `thop current` | Not Started | |
-
-### Proxy Mode
-| Task | Status | Notes |
-|------|--------|-------|
-| Stdin reading | Not Started | |
-| Command passthrough | Not Started | |
-| Output forwarding | Not Started | |
-| Daemon connection | Not Started | |
-
-### Configuration
-| Task | Status | Notes |
-|------|--------|-------|
-| TOML parsing | Not Started | |
-| Global settings | Not Started | |
-| Local session config | Not Started | |
-| SSH session config | Not Started | |
-| Env var overrides | Not Started | |
-
-### Error Handling
-| Task | Status | Notes |
-|------|--------|-------|
-| JSON error format | Not Started | |
-| Error codes | Not Started | |
-| Exit code mapping | Not Started | |
-| Actionable suggestions | Not Started | |
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Interactive Mode | Not Started | |
+| Local Session | Not Started | |
+| SSH Session | Not Started | |
+| Slash Commands | Not Started | |
+| Proxy Mode | Not Started | |
+| State Management | Not Started | |
+| Configuration | Not Started | |
+| Error Handling | Not Started | |
 
 ---
 
 ## Phase 2: Robustness
 
-### Multiple Sessions
-| Task | Status | Notes |
-|------|--------|-------|
-| Concurrent sessions | Not Started | |
-| Session isolation | Not Started | |
-| Session listing | Not Started | |
+*Blocked until Phase 1 complete*
 
-### Reconnection
-| Task | Status | Notes |
-|------|--------|-------|
-| Auto reconnection | Not Started | |
-| Exponential backoff | Not Started | |
-| Max attempts config | Not Started | |
-| State recovery | Not Started | |
-
-### State Persistence
-| Task | Status | Notes |
-|------|--------|-------|
-| CWD/env persistence | Not Started | |
-| Env replay on reconnect | Not Started | |
-| Context persistence | Not Started | |
-
-### Command Handling
-| Task | Status | Notes |
-|------|--------|-------|
-| Command timeout | Not Started | |
-| Timeout kill/report | Not Started | |
-| `thop exec` command | Not Started | |
-
-### Additional CLI
-| Task | Status | Notes |
-|------|--------|-------|
-| `thop connect` | Not Started | |
-| `thop close` | Not Started | |
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Multiple Sessions | Not Started | |
+| Reconnection | Not Started | |
+| State Persistence | Not Started | |
+| Command Handling | Not Started | |
 
 ---
 
 ## Phase 3: Polish
 
-### SSH Integration
-| Task | Status | Notes |
-|------|--------|-------|
-| Full SSH config parse | Not Started | |
-| Agent forwarding | Not Started | |
-| Jump host support | Not Started | |
-| Startup commands | Not Started | |
+*Blocked until Phase 2 complete*
 
-### Authentication Commands
-| Task | Status | Notes |
-|------|--------|-------|
-| `--password` flag | Not Started | |
-| `--password-env` flag | Not Started | |
-| `--password-file` flag | Not Started | |
-| File permission check | Not Started | |
-| `--clear` flag | Not Started | |
-| Credential timeout | Not Started | |
-| `thop trust` | Not Started | |
-| Fingerprint display | Not Started | |
-
-### Logging
-| Task | Status | Notes |
-|------|--------|-------|
-| Daemon logging | Not Started | |
-| Session logging | Not Started | |
-| Log levels | Not Started | |
-| `thop logs` command | Not Started | |
-| No sensitive data | Not Started | |
-
-### CLI Polish
-| Task | Status | Notes |
-|------|--------|-------|
-| `thop config` | Not Started | |
-| Bash completions | Not Started | |
-| Zsh completions | Not Started | |
-| Fish completions | Not Started | |
-| `--json` flag | Not Started | |
-| Verbose/quiet flags | Not Started | |
-
-### Proxy Enhancements
-| Task | Status | Notes |
-|------|--------|-------|
-| `#thop` commands | Not Started | |
-| SHELL support | Not Started | |
+| Component | Status | Notes |
+|-----------|--------|-------|
+| SSH Integration | Not Started | |
+| Authentication | Not Started | |
+| Logging | Not Started | |
+| CLI Polish | Not Started | |
 
 ---
 
 ## Phase 4: Advanced Features
 
-| Task | Status | Notes |
-|------|--------|-------|
-| PTY support | Not Started | |
-| Async execution | Not Started | |
-| Ctrl+C forwarding | Not Started | |
-| Auto async transition | Not Started | |
-| Ad-hoc sessions | Not Started | |
-| Idle timeout | Not Started | |
-| MCP server | Not Started | |
-| Metrics | Not Started | |
-| Session sharing | Not Started | |
+*Blocked until Phase 3 complete*
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| PTY Support | Not Started | |
+| Async Execution | Not Started | |
+| MCP Server | Not Started | |
 
 ---
 
 ## Testing Progress
 
-### Unit Tests
-| Task | Status | Notes |
-|------|--------|-------|
-| Config parsing | Not Started | |
-| Session state | Not Started | |
-| Command routing | Not Started | |
-| Backoff calculation | Not Started | |
-| Error handling | Not Started | |
-
-### Integration Tests
-| Task | Status | Notes |
-|------|--------|-------|
-| Local shell | Not Started | |
-| SSH connection | Not Started | |
-| Context switching | Not Started | |
-| Timeout handling | Not Started | |
-| Reconnection | Not Started | |
-
-### E2E Tests
-| Task | Status | Notes |
-|------|--------|-------|
-| Full workflow | Not Started | |
-| Multi-session | Not Started | |
-| Long-running commands | Not Started | |
-| Stress testing | Not Started | |
-
-### Infrastructure
-| Task | Status | Notes |
-|------|--------|-------|
-| Docker SSH targets | Not Started | |
-| Network simulation | Not Started | |
-| CI pipeline | Not Started | |
+| Category | Status | Notes |
+|----------|--------|-------|
+| Unit Tests | Not Started | |
+| Integration Tests | Not Started | |
+| E2E Tests | Not Started | |
+| Test Infrastructure | Not Started | |
 
 ---
 
@@ -229,23 +215,35 @@
 
 | Task | Status | Notes |
 |------|--------|-------|
+| PRD.md | Complete | v0.2.0 - Shell wrapper architecture |
+| RESEARCH.md | Complete | Architecture research and decisions |
+| TODO.md | Complete | Task list for all phases |
+| PROGRESS.md | Complete | This file |
+| CLAUDE.md | Complete | Development guide |
+| AGENTS.md | Complete | Agent development guide |
 | README.md | Not Started | |
 | Installation guide | Not Started | |
-| Config reference | Not Started | |
-| Claude Code integration | Not Started | |
-| AI agent integration | Not Started | |
-| Troubleshooting | Not Started | |
+| Configuration reference | Not Started | |
 
 ---
 
 ## Changelog
 
 ### 2026-01-16
+- Updated architecture from daemon to shell wrapper
+- Added Phase 0 for Go/Rust language evaluation
+- Created RESEARCH.md with architecture decisions
+- Updated all documentation for new approach:
+  - PRD.md v0.2.0
+  - TODO.md reorganized by phase
+  - CLAUDE.md updated
+  - AGENTS.md updated
+  - PROGRESS.md updated
+
+### 2026-01-16 (earlier)
 - Created initial project documentation
-- CLAUDE.md - Development guide for Claude Code
-- AGENTS.md - General agent development guide
-- TODO.md - Task list from PRD
-- PROGRESS.md - This file
+- PRD.md v0.1.0 (daemon architecture)
+- Initial TODO.md, PROGRESS.md, CLAUDE.md, AGENTS.md
 
 ---
 
@@ -255,6 +253,6 @@
 |--------|---------|
 | Not Started | Work has not begun |
 | In Progress | Currently being worked on |
-| Blocked | Cannot proceed (note reason) |
+| Blocked | Cannot proceed (see notes) |
 | Complete | Finished and tested |
 | Deferred | Postponed to later phase |
