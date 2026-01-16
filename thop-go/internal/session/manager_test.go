@@ -1,6 +1,7 @@
 package session
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -320,5 +321,170 @@ func TestManagerWithNilState(t *testing.T) {
 	// SetActiveSession should work without state persistence
 	if err := mgr.SetActiveSession("local"); err != nil {
 		t.Errorf("SetActiveSession failed: %v", err)
+	}
+}
+
+func TestSSHConfigIntegration(t *testing.T) {
+	tmpDir := t.TempDir()
+	statePath := filepath.Join(tmpDir, "state.json")
+
+	// Create a test SSH config file
+	sshDir := filepath.Join(tmpDir, ".ssh")
+	os.MkdirAll(sshDir, 0700)
+	sshConfigPath := filepath.Join(sshDir, "config")
+
+	sshConfigContent := `
+Host myalias
+    HostName actual.server.com
+    User deploy
+    Port 2222
+    IdentityFile ~/.ssh/mykey
+
+Host prod
+    HostName prod.example.com
+    User admin
+`
+
+	if err := os.WriteFile(sshConfigPath, []byte(sshConfigContent), 0600); err != nil {
+		t.Fatalf("failed to write test SSH config: %v", err)
+	}
+
+	// Set HOME to tmpDir so SSH config is loaded from there
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	cfg := &config.Config{
+		Settings: config.Settings{
+			DefaultSession: "local",
+		},
+		Sessions: map[string]config.Session{
+			"local": {
+				Type: "local",
+			},
+			// Session using SSH config alias directly
+			"myalias": {
+				Type: "ssh",
+				Host: "myalias", // This should resolve from SSH config
+			},
+			// Session with explicit host (should not use SSH config)
+			"explicit": {
+				Type: "ssh",
+				Host: "explicit.example.com",
+				User: "explicit-user",
+				Port: 3333,
+			},
+		},
+	}
+
+	stateMgr := state.NewManager(statePath)
+	stateMgr.Load()
+
+	mgr := NewManager(cfg, stateMgr)
+
+	// Test that SSH config hosts are available
+	sshHosts := mgr.SSHConfigHosts()
+	if len(sshHosts) != 2 {
+		t.Errorf("expected 2 SSH config hosts, got %d", len(sshHosts))
+	}
+
+	// Test HasSSHConfigHost
+	if !mgr.HasSSHConfigHost("myalias") {
+		t.Error("expected HasSSHConfigHost('myalias') to be true")
+	}
+	if !mgr.HasSSHConfigHost("prod") {
+		t.Error("expected HasSSHConfigHost('prod') to be true")
+	}
+	if mgr.HasSSHConfigHost("unknown") {
+		t.Error("expected HasSSHConfigHost('unknown') to be false")
+	}
+
+	// Verify the myalias session resolved settings from SSH config
+	session, ok := mgr.GetSession("myalias")
+	if !ok {
+		t.Fatal("expected to find 'myalias' session")
+	}
+
+	sshSession, ok := session.(*SSHSession)
+	if !ok {
+		t.Fatal("expected SSHSession type")
+	}
+
+	if sshSession.Host() != "actual.server.com" {
+		t.Errorf("expected host 'actual.server.com', got '%s'", sshSession.Host())
+	}
+	if sshSession.User() != "deploy" {
+		t.Errorf("expected user 'deploy', got '%s'", sshSession.User())
+	}
+	if sshSession.Port() != 2222 {
+		t.Errorf("expected port 2222, got %d", sshSession.Port())
+	}
+
+	// Verify the explicit session uses explicit values (not SSH config)
+	explicitSession, ok := mgr.GetSession("explicit")
+	if !ok {
+		t.Fatal("expected to find 'explicit' session")
+	}
+
+	explicitSSH, ok := explicitSession.(*SSHSession)
+	if !ok {
+		t.Fatal("expected SSHSession type")
+	}
+
+	if explicitSSH.Host() != "explicit.example.com" {
+		t.Errorf("expected host 'explicit.example.com', got '%s'", explicitSSH.Host())
+	}
+	if explicitSSH.User() != "explicit-user" {
+		t.Errorf("expected user 'explicit-user', got '%s'", explicitSSH.User())
+	}
+	if explicitSSH.Port() != 3333 {
+		t.Errorf("expected port 3333, got %d", explicitSSH.Port())
+	}
+}
+
+func TestSSHConfigWithNoSSHConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	statePath := filepath.Join(tmpDir, "state.json")
+
+	// Set HOME to tmpDir (no .ssh/config exists)
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	cfg := &config.Config{
+		Settings: config.Settings{
+			DefaultSession: "local",
+		},
+		Sessions: map[string]config.Session{
+			"local": {
+				Type: "local",
+			},
+			"server": {
+				Type: "ssh",
+				Host: "server.example.com",
+				User: "user",
+			},
+		},
+	}
+
+	stateMgr := state.NewManager(statePath)
+	stateMgr.Load()
+
+	mgr := NewManager(cfg, stateMgr)
+
+	// Should still work without SSH config
+	if !mgr.HasSession("server") {
+		t.Error("expected to find 'server' session")
+	}
+
+	// SSHConfigHosts should return empty (not nil) or nil
+	hosts := mgr.SSHConfigHosts()
+	if len(hosts) != 0 {
+		t.Errorf("expected 0 SSH config hosts, got %d", len(hosts))
+	}
+
+	// HasSSHConfigHost should return false
+	if mgr.HasSSHConfigHost("anything") {
+		t.Error("expected HasSSHConfigHost to return false without SSH config")
 	}
 }

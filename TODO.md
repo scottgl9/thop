@@ -5,169 +5,103 @@ See PROGRESS.md for completion tracking.
 
 ---
 
-## Phase 0: Language Evaluation
+## Phase 0: Language Evaluation ✅ COMPLETE
 
-Implement minimal prototypes in both Go and Rust to compare.
+Both Go and Rust prototypes implemented and tested.
 
-### Go Prototype (`thop-go/`)
+### Go Prototype (`thop-go/`) ✅
+- [x] Project setup with go.mod
+- [x] Interactive mode with prompt
+- [x] Local shell execution
+- [x] SSH session support
+- [x] Slash commands (/connect, /switch, /local, /status, /help)
+- [x] Proxy mode (--proxy)
+- [x] TOML configuration
+- [x] Unit tests (105 tests passing)
 
-#### Project Setup
-- [ ] Initialize Go module (`go mod init`)
-- [ ] Add dependencies: `golang.org/x/crypto/ssh`, `github.com/pelletier/go-toml`
-- [ ] Create project structure (`cmd/`, `internal/`)
+### Rust Prototype (`thop-rust/`) ✅
+- [x] Project setup with Cargo
+- [x] Interactive mode with prompt
+- [x] Local shell execution
+- [x] SSH session support
+- [x] Slash commands
+- [x] Proxy mode
+- [x] TOML configuration
+- [x] Unit tests (32 tests passing)
 
-#### Interactive Mode
-- [ ] Implement main loop with `(session) $` prompt
-- [ ] Parse user input for slash commands vs regular commands
-- [ ] Display output from command execution
-
-#### Local Shell
-- [ ] Execute commands in local shell subprocess
-- [ ] Capture stdout/stderr
-- [ ] Return exit codes
-
-#### SSH Session
-- [ ] Establish SSH connection using `golang.org/x/crypto/ssh`
-- [ ] Execute commands over SSH channel
-- [ ] Handle authentication (key-based)
-- [ ] Return `AUTH_PASSWORD_REQUIRED` error when needed
-
-#### Slash Commands
-- [ ] `/connect <session>` - Establish SSH connection
-- [ ] `/switch <session>` - Change active context
-- [ ] `/local` - Switch to local shell
-- [ ] `/status` - Show all sessions
-- [ ] `/help` - Show available commands
-
-#### Proxy Mode
-- [ ] `--proxy` flag to run in proxy mode
-- [ ] Read commands from stdin line-by-line
-- [ ] Route to active session
-- [ ] Output to stdout/stderr
-
-#### Configuration
-- [ ] Parse `~/.config/thop/config.toml`
-- [ ] Load session definitions
+### Evaluation Results ✅
+- [x] Binary size: Go 4.8MB, Rust 1.4MB
+- [x] Both have similar code complexity
+- [x] Both have fast startup (<100ms)
+- [x] **Decision: Continue with Go** for faster development
 
 ---
 
-### Rust Prototype (`thop-rust/`)
-
-#### Project Setup
-- [ ] Initialize Cargo project (`cargo init`)
-- [ ] Add dependencies: `russh`, `toml`, `clap`, `tokio`
-- [ ] Create project structure (`src/`)
-
-#### Interactive Mode
-- [ ] Implement main loop with `(session) $` prompt
-- [ ] Parse user input for slash commands vs regular commands
-- [ ] Display output from command execution
-
-#### Local Shell
-- [ ] Execute commands in local shell subprocess
-- [ ] Capture stdout/stderr
-- [ ] Return exit codes
-
-#### SSH Session
-- [ ] Establish SSH connection using `russh`
-- [ ] Execute commands over SSH channel
-- [ ] Handle authentication (key-based)
-- [ ] Return `AUTH_PASSWORD_REQUIRED` error when needed
-
-#### Slash Commands
-- [ ] `/connect <session>` - Establish SSH connection
-- [ ] `/switch <session>` - Change active context
-- [ ] `/local` - Switch to local shell
-- [ ] `/status` - Show all sessions
-- [ ] `/help` - Show available commands
-
-#### Proxy Mode
-- [ ] `--proxy` flag to run in proxy mode
-- [ ] Read commands from stdin line-by-line
-- [ ] Route to active session
-- [ ] Output to stdout/stderr
-
-#### Configuration
-- [ ] Parse `~/.config/thop/config.toml`
-- [ ] Load session definitions
-
----
-
-### Evaluation Criteria
-- [ ] Compare code complexity and lines of code
-- [ ] Measure binary size
-- [ ] Measure startup time
-- [ ] Evaluate SSH library ergonomics
-- [ ] Document developer experience
-- [ ] Make language selection decision
-
----
-
-## Phase 1: Core MVP
+## Phase 1: Core MVP ✅ MOSTLY COMPLETE
 
 After language selection, implement full MVP in chosen language.
 
-### Interactive Mode
-- [ ] Full interactive shell with `(session) $` prompt
-- [ ] Readline support (history, line editing)
-- [ ] Proper terminal handling
-- [ ] Graceful exit on Ctrl+D
+### Interactive Mode ✅
+- [x] Full interactive shell with `(session) $` prompt
+- [x] Readline support (history, line editing)
+- [x] Proper terminal handling
+- [x] Graceful exit on Ctrl+D
 
-### Local Session
-- [ ] Local shell session management
-- [ ] Track current working directory
-- [ ] Track environment variables
-- [ ] Persist state across commands
+### Local Session ✅
+- [x] Local shell session management
+- [x] Track current working directory
+- [x] Track environment variables
+- [x] Persist state across commands
 
-### SSH Session
-- [ ] SSH connection establishment
-- [ ] Integrate with `~/.ssh/config` host aliases
-- [ ] Support SSH key authentication from `~/.ssh/`
-- [ ] Respect `IdentityFile` settings
-- [ ] Use ssh-agent if available
-- [ ] Non-blocking authentication (return error, don't prompt)
+### SSH Session ✅
+- [x] SSH connection establishment
+- [x] Integrate with `~/.ssh/config` host aliases
+- [x] Support SSH key authentication from `~/.ssh/`
+- [x] Respect `IdentityFile` settings
+- [x] Use ssh-agent if available
+- [x] Non-blocking authentication (return error, don't prompt)
 
-### Slash Commands
-- [ ] `/connect <session>` - Full implementation
-- [ ] `/switch <session>` - Full implementation
-- [ ] `/local` - Shortcut for `/switch local`
-- [ ] `/status` - Show all sessions with state
-- [ ] `/close <session>` - Close SSH connection
-- [ ] `/help` - Show all commands with descriptions
+### Slash Commands ✅
+- [x] `/connect <session>` - Full implementation
+- [x] `/switch <session>` - Full implementation
+- [x] `/local` - Shortcut for `/switch local`
+- [x] `/status` - Show all sessions with state
+- [x] `/close <session>` - Close SSH connection
+- [x] `/help` - Show all commands with descriptions
 
-### Proxy Mode
-- [ ] `thop --proxy` for AI agent integration
-- [ ] SHELL-compatible execution
-- [ ] Line-buffered stdin reading
-- [ ] stdout/stderr passthrough
-- [ ] Exit code preservation
+### Proxy Mode ✅
+- [x] `thop --proxy` for AI agent integration
+- [x] SHELL-compatible execution (-c flag)
+- [x] Line-buffered stdin reading
+- [x] stdout/stderr passthrough
+- [x] Exit code preservation
 
-### State Management
-- [ ] State file at `~/.local/share/thop/state.json`
-- [ ] Active session tracking
-- [ ] Per-session state (cwd, env)
-- [ ] File locking for concurrent access
+### State Management ✅
+- [x] State file at `~/.local/share/thop/state.json`
+- [x] Active session tracking
+- [x] Per-session state (cwd, env)
+- [x] File locking for concurrent access
 
-### Configuration
-- [ ] Parse `~/.config/thop/config.toml`
-- [ ] Global settings (timeout, log level)
-- [ ] Session definitions (local, SSH)
-- [ ] Environment variable overrides
+### Configuration ✅
+- [x] Parse `~/.config/thop/config.toml`
+- [x] Global settings (timeout, log level)
+- [x] Session definitions (local, SSH)
+- [x] Environment variable overrides
 
-### Error Handling
-- [ ] Structured JSON error format
-- [ ] Error codes: `CONNECTION_FAILED`, `AUTH_*`, `SESSION_*`
-- [ ] Exit codes: 0=success, 1=error, 2=auth, 3=host key
-- [ ] Actionable error suggestions
+### Error Handling ✅
+- [x] Structured JSON error format
+- [x] Error codes: `CONNECTION_FAILED`, `AUTH_*`, `SESSION_*`
+- [x] Exit codes: 0=success, 1=error, 2=auth, 3=host key
+- [x] Actionable error suggestions
 
 ---
 
 ## Phase 2: Robustness
 
 ### Multiple Sessions
-- [ ] Support multiple concurrent SSH sessions
-- [ ] Session isolation (independent state per session)
-- [ ] Session listing with connection status
+- [x] Support multiple concurrent SSH sessions
+- [x] Session isolation (independent state per session)
+- [x] Session listing with connection status
 
 ### Reconnection
 - [ ] Automatic reconnection on connection failure
@@ -176,9 +110,9 @@ After language selection, implement full MVP in chosen language.
 - [ ] State recovery after reconnect
 
 ### State Persistence
-- [ ] Persist cwd/env across commands
+- [x] Persist cwd/env across commands
 - [ ] Replay environment on reconnect
-- [ ] State survives thop restart
+- [x] State survives thop restart
 
 ### Command Handling
 - [ ] Configurable command timeout (default: 300s)
@@ -190,7 +124,7 @@ After language selection, implement full MVP in chosen language.
 ## Phase 3: Polish
 
 ### SSH Integration
-- [ ] Full `~/.ssh/config` parsing
+- [x] Full `~/.ssh/config` parsing
 - [ ] SSH agent forwarding support
 - [ ] Jump host / bastion support
 - [ ] Startup commands per session
@@ -207,13 +141,13 @@ After language selection, implement full MVP in chosen language.
 - [ ] Configurable log levels
 - [ ] No sensitive data in logs
 
-### CLI Polish
-- [ ] `--status` flag to show status and exit
-- [ ] `--json` flag for machine-readable output
-- [ ] `-v/--verbose` and `-q/--quiet` flags
-- [ ] Shell completions for bash
-- [ ] Shell completions for zsh
-- [ ] Shell completions for fish
+### CLI Polish ✅
+- [x] `--status` flag to show status and exit
+- [x] `--json` flag for machine-readable output
+- [x] `-v/--verbose` and `-q/--quiet` flags
+- [x] Shell completions for bash
+- [x] Shell completions for zsh
+- [x] Shell completions for fish
 
 ---
 
@@ -236,17 +170,17 @@ After language selection, implement full MVP in chosen language.
 
 ## Testing Tasks
 
-### Unit Tests
-- [ ] Configuration parsing tests
-- [ ] Session state management tests
-- [ ] Slash command parsing tests
-- [ ] Error handling tests
+### Unit Tests ✅
+- [x] Configuration parsing tests
+- [x] Session state management tests
+- [x] Slash command parsing tests
+- [x] Error handling tests
 
 ### Integration Tests
-- [ ] Local shell execution tests
+- [x] Local shell execution tests
 - [ ] SSH connection tests (Docker)
-- [ ] Context switching tests
-- [ ] State file tests
+- [x] Context switching tests
+- [x] State file tests
 
 ### E2E Tests
 - [ ] Full workflow with mock AI agent
@@ -272,8 +206,8 @@ After language selection, implement full MVP in chosen language.
 
 ## Priority Legend
 
-- **Phase 0**: Language evaluation - Compare Go and Rust
-- **Phase 1**: Core MVP - Minimum viable product
+- **Phase 0**: Language evaluation - Compare Go and Rust ✅
+- **Phase 1**: Core MVP - Minimum viable product ✅
 - **Phase 2**: Robustness - Production reliability
 - **Phase 3**: Polish - User experience
 - **Phase 4**: Advanced - Extended capabilities

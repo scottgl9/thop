@@ -314,3 +314,98 @@ func TestProxyModeWindowsLineEndings(t *testing.T) {
 		t.Errorf("expected 'test2' in output")
 	}
 }
+
+func TestProxyModeExecuteSingleCommand(t *testing.T) {
+	app := createProxyTestApp(t)
+
+	// Execute single command
+	result := app.executeProxyCommand("echo hello world")
+
+	// Should succeed with exit code 0
+	if result.ExitCode != 0 {
+		t.Errorf("expected exit code 0, got %d", result.ExitCode)
+	}
+}
+
+func TestProxyModeExecuteFailingCommand(t *testing.T) {
+	app := createProxyTestApp(t)
+
+	// Execute failing command
+	result := app.executeProxyCommand("exit 42")
+
+	// Should return the command's exit code
+	if result.ExitCode != 42 {
+		t.Errorf("expected exit code 42, got %d", result.ExitCode)
+	}
+}
+
+func TestErrorToExitCode(t *testing.T) {
+	app := createProxyTestApp(t)
+
+	tests := []struct {
+		name     string
+		err      error
+		expected int
+	}{
+		{
+			name:     "auth password required",
+			err:      &session.Error{Code: session.ErrAuthPasswordRequired},
+			expected: ExitAuthError,
+		},
+		{
+			name:     "auth failed",
+			err:      &session.Error{Code: session.ErrAuthFailed},
+			expected: ExitAuthError,
+		},
+		{
+			name:     "host key verification",
+			err:      &session.Error{Code: session.ErrHostKeyVerification},
+			expected: ExitHostKeyError,
+		},
+		{
+			name:     "host key changed",
+			err:      &session.Error{Code: session.ErrHostKeyChanged},
+			expected: ExitHostKeyError,
+		},
+		{
+			name:     "connection failed",
+			err:      &session.Error{Code: session.ErrConnectionFailed},
+			expected: ExitGeneralError,
+		},
+		{
+			name:     "session not found",
+			err:      &session.Error{Code: session.ErrSessionNotFound},
+			expected: ExitGeneralError,
+		},
+		{
+			name:     "generic error",
+			err:      os.ErrNotExist,
+			expected: ExitGeneralError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			exitCode := app.errorToExitCode(tt.err)
+			if exitCode != tt.expected {
+				t.Errorf("expected exit code %d, got %d", tt.expected, exitCode)
+			}
+		})
+	}
+}
+
+func TestExitCodeConstants(t *testing.T) {
+	// Verify exit code constants are correct
+	if ExitSuccess != 0 {
+		t.Errorf("ExitSuccess should be 0, got %d", ExitSuccess)
+	}
+	if ExitGeneralError != 1 {
+		t.Errorf("ExitGeneralError should be 1, got %d", ExitGeneralError)
+	}
+	if ExitAuthError != 2 {
+		t.Errorf("ExitAuthError should be 2, got %d", ExitAuthError)
+	}
+	if ExitHostKeyError != 3 {
+		t.Errorf("ExitHostKeyError should be 3, got %d", ExitHostKeyError)
+	}
+}

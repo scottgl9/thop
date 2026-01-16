@@ -2,9 +2,11 @@ package session
 
 import (
 	"fmt"
+	"strconv"
 	"sync"
 
 	"github.com/scottgl9/thop/internal/config"
+	"github.com/scottgl9/thop/internal/sshconfig"
 	"github.com/scottgl9/thop/internal/state"
 )
 
@@ -14,16 +16,21 @@ type Manager struct {
 	activeSession string
 	config        *config.Config
 	state         *state.Manager
+	sshConfig     *sshconfig.Config
 	mu            sync.RWMutex
 }
 
 // NewManager creates a new session manager
 func NewManager(cfg *config.Config, stateMgr *state.Manager) *Manager {
+	// Load SSH config from ~/.ssh/config
+	sshCfg, _ := sshconfig.Load()
+
 	m := &Manager{
 		sessions:      make(map[string]Session),
 		activeSession: cfg.Settings.DefaultSession,
 		config:        cfg,
 		state:         stateMgr,
+		sshConfig:     sshCfg,
 	}
 
 	// Initialize sessions from config
@@ -46,12 +53,57 @@ func NewManager(cfg *config.Config, stateMgr *state.Manager) *Manager {
 func (m *Manager) createSession(name string, cfg config.Session) Session {
 	switch cfg.Type {
 	case "ssh":
+		// Resolve SSH settings from ~/.ssh/config if not specified in thop config
+		host := cfg.Host
+		user := cfg.User
+		port := cfg.Port
+		keyFile := cfg.IdentityFile
+
+		if m.sshConfig != nil {
+			// Use host alias to look up in SSH config
+			alias := host
+			if alias == "" {
+				alias = name // Use session name as alias if no host specified
+			}
+
+			// Resolve hostname from SSH config
+			if host == "" {
+				host = m.sshConfig.ResolveHost(alias)
+			} else {
+				// Host was specified, but might be an alias
+				resolved := m.sshConfig.ResolveHost(host)
+				if resolved != host {
+					host = resolved
+				}
+			}
+
+			// Resolve user from SSH config if not specified
+			if user == "" {
+				user = m.sshConfig.ResolveUser(alias)
+			}
+
+			// Resolve port from SSH config if not specified
+			if port == 0 {
+				portStr := m.sshConfig.ResolvePort(alias)
+				if portStr != "22" {
+					if p, err := strconv.Atoi(portStr); err == nil {
+						port = p
+					}
+				}
+			}
+
+			// Resolve identity file from SSH config if not specified
+			if keyFile == "" {
+				keyFile = m.sshConfig.ResolveIdentityFile(alias)
+			}
+		}
+
 		return NewSSHSession(SSHConfig{
 			Name:    name,
-			Host:    cfg.Host,
-			Port:    cfg.Port,
-			User:    cfg.User,
-			KeyFile: cfg.IdentityFile,
+			Host:    host,
+			Port:    port,
+			User:    user,
+			KeyFile: keyFile,
 		})
 	default:
 		return NewLocalSession(name, cfg.Shell)
@@ -247,4 +299,20 @@ func (m *Manager) HasSession(name string) bool {
 
 	_, ok := m.sessions[name]
 	return ok
+}
+
+// SSHConfigHosts returns all hosts defined in ~/.ssh/config
+func (m *Manager) SSHConfigHosts() []string {
+	if m.sshConfig == nil {
+		return nil
+	}
+	return m.sshConfig.ListHosts()
+}
+
+// HasSSHConfigHost returns true if a host is defined in ~/.ssh/config
+func (m *Manager) HasSSHConfigHost(name string) bool {
+	if m.sshConfig == nil {
+		return false
+	}
+	return m.sshConfig.GetHost(name) != nil
 }

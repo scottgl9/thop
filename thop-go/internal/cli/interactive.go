@@ -1,17 +1,75 @@
 package cli
 
 import (
-	"bufio"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
+	"github.com/chzyer/readline"
 	"github.com/scottgl9/thop/internal/session"
 )
 
 // runInteractive runs the interactive shell mode
 func (a *App) runInteractive() error {
-	reader := bufio.NewReader(os.Stdin)
+	// Set up history file
+	historyFile := ""
+	if dataDir := os.Getenv("XDG_DATA_HOME"); dataDir != "" {
+		historyFile = filepath.Join(dataDir, "thop", "history")
+	} else if home, err := os.UserHomeDir(); err == nil {
+		historyFile = filepath.Join(home, ".local", "share", "thop", "history")
+	}
+
+	// Ensure history directory exists
+	if historyFile != "" {
+		os.MkdirAll(filepath.Dir(historyFile), 0700)
+	}
+
+	// Create completer for slash commands
+	completer := readline.NewPrefixCompleter(
+		readline.PcItem("/connect",
+			readline.PcItemDynamic(a.sessionCompleter()),
+		),
+		readline.PcItem("/switch",
+			readline.PcItemDynamic(a.sessionCompleter()),
+		),
+		readline.PcItem("/close",
+			readline.PcItemDynamic(a.sessionCompleter()),
+		),
+		readline.PcItem("/local"),
+		readline.PcItem("/status"),
+		readline.PcItem("/help"),
+		readline.PcItem("/exit"),
+		readline.PcItem("/c",
+			readline.PcItemDynamic(a.sessionCompleter()),
+		),
+		readline.PcItem("/sw",
+			readline.PcItemDynamic(a.sessionCompleter()),
+		),
+		readline.PcItem("/d",
+			readline.PcItemDynamic(a.sessionCompleter()),
+		),
+		readline.PcItem("/l"),
+		readline.PcItem("/s"),
+		readline.PcItem("/h"),
+		readline.PcItem("/q"),
+	)
+
+	// Create readline instance
+	rl, err := readline.NewEx(&readline.Config{
+		Prompt:            a.getPrompt(),
+		HistoryFile:       historyFile,
+		AutoComplete:      completer,
+		InterruptPrompt:   "^C",
+		EOFPrompt:         "exit",
+		HistorySearchFold: true,
+	})
+	if err != nil {
+		// Fall back to simple mode if readline fails
+		return a.runInteractiveSimple()
+	}
+	defer rl.Close()
 
 	if !a.quiet {
 		fmt.Println("thop - Terminal Hopper for Agents")
@@ -20,17 +78,22 @@ func (a *App) runInteractive() error {
 	}
 
 	for {
-		// Print prompt
-		sessionName := a.sessions.GetActiveSessionName()
-		prompt := session.FormatPrompt(sessionName)
-		fmt.Print(prompt)
+		// Update prompt with current session
+		rl.SetPrompt(a.getPrompt())
 
 		// Read input
-		input, err := reader.ReadString('\n')
+		input, err := rl.Readline()
 		if err != nil {
-			// EOF (Ctrl+D)
-			fmt.Println()
-			return nil
+			if err == readline.ErrInterrupt {
+				// Ctrl+C - clear line and continue
+				continue
+			}
+			if err == io.EOF {
+				// Ctrl+D - exit
+				fmt.Println()
+				return nil
+			}
+			return err
 		}
 
 		input = strings.TrimSpace(input)
@@ -66,6 +129,76 @@ func (a *App) runInteractive() error {
 				fmt.Fprintln(os.Stderr)
 			}
 		}
+	}
+}
+
+// runInteractiveSimple runs interactive mode without readline (fallback)
+func (a *App) runInteractiveSimple() error {
+	reader := readline.NewCancelableStdin(os.Stdin)
+	defer reader.Close()
+
+	if !a.quiet {
+		fmt.Println("thop - Terminal Hopper for Agents")
+		fmt.Println("Type /help for available commands")
+		fmt.Println()
+	}
+
+	buf := make([]byte, 4096)
+	for {
+		fmt.Print(a.getPrompt())
+
+		n, err := reader.Read(buf)
+		if err != nil {
+			if err == io.EOF {
+				fmt.Println()
+				return nil
+			}
+			return err
+		}
+
+		input := strings.TrimSpace(string(buf[:n]))
+		if input == "" {
+			continue
+		}
+
+		if strings.HasPrefix(input, "/") {
+			if err := a.handleSlashCommand(input); err != nil {
+				a.outputError(err)
+			}
+			continue
+		}
+
+		result, err := a.sessions.Execute(input)
+		if err != nil {
+			a.outputError(err)
+			continue
+		}
+
+		if result.Stdout != "" {
+			fmt.Print(result.Stdout)
+			if !strings.HasSuffix(result.Stdout, "\n") {
+				fmt.Println()
+			}
+		}
+		if result.Stderr != "" {
+			fmt.Fprint(os.Stderr, result.Stderr)
+			if !strings.HasSuffix(result.Stderr, "\n") {
+				fmt.Fprintln(os.Stderr)
+			}
+		}
+	}
+}
+
+// getPrompt returns the current prompt string
+func (a *App) getPrompt() string {
+	sessionName := a.sessions.GetActiveSessionName()
+	return session.FormatPrompt(sessionName)
+}
+
+// sessionCompleter returns a function that provides session name completions
+func (a *App) sessionCompleter() func(string) []string {
+	return func(line string) []string {
+		return a.sessions.SessionNames()
 	}
 }
 
@@ -138,7 +271,13 @@ Shortcuts:
   /l   = /local
   /s   = /status
   /d   = /close (disconnect)
-  /q   = /exit`)
+  /q   = /exit
+
+Keyboard shortcuts:
+  Ctrl+D  Exit
+  Ctrl+C  Cancel current line
+  Up/Down History navigation
+  Tab     Auto-complete commands`)
 }
 
 // cmdConnect handles the /connect command

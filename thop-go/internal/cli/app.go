@@ -17,15 +17,17 @@ type App struct {
 	GitCommit string
 	BuildTime string
 
-	config     *config.Config
-	state      *state.Manager
-	sessions   *session.Manager
-	configPath string
-	proxyMode  bool
-	jsonOutput bool
-	showStatus bool
-	verbose    bool
-	quiet      bool
+	config       *config.Config
+	state        *state.Manager
+	sessions     *session.Manager
+	configPath   string
+	proxyMode    bool
+	proxyCommand string // Command to execute in proxy mode (-c flag)
+	jsonOutput   bool
+	showStatus   bool
+	completions  string // Shell name for completions
+	verbose      bool
+	quiet        bool
 }
 
 // NewApp creates a new App instance
@@ -42,6 +44,11 @@ func (a *App) Run(args []string) error {
 	// Parse flags
 	if err := a.parseFlags(args); err != nil {
 		return err
+	}
+
+	// Handle completions before loading config (doesn't need config)
+	if a.completions != "" {
+		return a.printCompletions(a.completions)
 	}
 
 	// Load configuration
@@ -84,9 +91,11 @@ func (a *App) parseFlags(args []string) error {
 	var showHelp bool
 
 	flags.BoolVar(&a.proxyMode, "proxy", false, "Run in proxy mode (for AI agents)")
+	flags.StringVar(&a.proxyCommand, "c", "", "Execute command (for shell compatibility)")
 	flags.BoolVar(&a.showStatus, "status", false, "Show status and exit")
 	flags.StringVar(&a.configPath, "config", "", "Path to config file")
 	flags.BoolVar(&a.jsonOutput, "json", false, "Output in JSON format")
+	flags.StringVar(&a.completions, "completions", "", "Generate shell completions (bash, zsh, fish)")
 	flags.BoolVar(&a.verbose, "v", false, "Verbose output")
 	flags.BoolVar(&a.verbose, "verbose", false, "Verbose output")
 	flags.BoolVar(&a.quiet, "q", false, "Quiet output")
@@ -117,6 +126,11 @@ func (a *App) parseFlags(args []string) error {
 		os.Exit(0)
 	}
 
+	// If -c is provided, enable proxy mode automatically
+	if a.proxyCommand != "" {
+		a.proxyMode = true
+	}
+
 	return nil
 }
 
@@ -134,17 +148,20 @@ func (a *App) printHelp() {
 USAGE:
     thop [OPTIONS]              Start interactive mode
     thop --proxy                Start proxy mode (for AI agents)
+    thop -c "command"           Execute command and exit
     thop --status               Show status and exit
 
 OPTIONS:
-    --proxy         Run in proxy mode (SHELL compatible)
-    --status        Show all sessions and exit
-    --config <path> Use alternate config file
-    --json          Output in JSON format
-    -v, --verbose   Increase logging verbosity
-    -q, --quiet     Suppress non-error output
-    -h, --help      Print help information
-    -V, --version   Print version
+    --proxy           Run in proxy mode (SHELL compatible)
+    -c <command>      Execute command and exit with its exit code
+    --status          Show all sessions and exit
+    --config <path>   Use alternate config file
+    --json            Output in JSON format
+    --completions <s> Generate shell completions (bash, zsh, fish)
+    -v, --verbose     Increase logging verbosity
+    -q, --quiet       Suppress non-error output
+    -h, --help        Print help information
+    -V, --version     Print version
 
 INTERACTIVE MODE COMMANDS:
     /connect <session>  Establish SSH connection
@@ -154,15 +171,34 @@ INTERACTIVE MODE COMMANDS:
     /close <session>    Close SSH connection
     /help               Show commands
 
+EXIT CODES:
+    0  Success
+    1  General error
+    2  Authentication failed
+    3  Host key verification failed
+
 EXAMPLES:
     # Start interactive mode
     thop
+
+    # Execute single command
+    thop -c "ls -la"
 
     # Use as shell for AI agent
     SHELL="thop --proxy" claude
 
     # Check status
-    thop --status`)
+    thop --status
+
+SHELL COMPLETIONS:
+    # Bash (add to ~/.bashrc)
+    eval "$(thop --completions bash)"
+
+    # Zsh (add to ~/.zshrc)
+    eval "$(thop --completions zsh)"
+
+    # Fish (save to ~/.config/fish/completions/thop.fish)
+    thop --completions fish > ~/.config/fish/completions/thop.fish`)
 }
 
 // printStatus prints the status of all sessions
