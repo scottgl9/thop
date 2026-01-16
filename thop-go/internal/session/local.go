@@ -2,9 +2,11 @@ package session
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 // LocalSession represents a local shell session
@@ -14,6 +16,7 @@ type LocalSession struct {
 	cwd       string
 	env       map[string]string
 	connected bool
+	timeout   time.Duration
 }
 
 // NewLocalSession creates a new local session
@@ -37,7 +40,13 @@ func NewLocalSession(name, shell string) *LocalSession {
 		cwd:       cwd,
 		env:       make(map[string]string),
 		connected: true, // Local is always "connected"
+		timeout:   300 * time.Second,
 	}
+}
+
+// SetTimeout sets the command timeout
+func (s *LocalSession) SetTimeout(timeout time.Duration) {
+	s.timeout = timeout
 }
 
 // Name returns the session name
@@ -75,8 +84,12 @@ func (s *LocalSession) Execute(cmdStr string) (*ExecuteResult, error) {
 		return s.handleCD(cmdStr)
 	}
 
-	// Create the command
-	cmd := exec.Command(s.shell, "-c", cmdStr)
+	// Create context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), s.timeout)
+	defer cancel()
+
+	// Create the command with context
+	cmd := exec.CommandContext(ctx, s.shell, "-c", cmdStr)
 	cmd.Dir = s.cwd
 
 	// Set environment
@@ -100,6 +113,15 @@ func (s *LocalSession) Execute(cmdStr string) (*ExecuteResult, error) {
 	}
 
 	if err != nil {
+		// Check if timeout was exceeded
+		if ctx.Err() == context.DeadlineExceeded {
+			return nil, &Error{
+				Code:      ErrCommandTimeout,
+				Message:   "Command timed out after " + s.timeout.String(),
+				Session:   s.name,
+				Retryable: true,
+			}
+		}
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			result.ExitCode = exitErr.ExitCode()
 		} else {

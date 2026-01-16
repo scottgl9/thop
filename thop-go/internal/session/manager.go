@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/scottgl9/thop/internal/config"
 	"github.com/scottgl9/thop/internal/sshconfig"
@@ -12,12 +13,13 @@ import (
 
 // Manager manages all sessions
 type Manager struct {
-	sessions      map[string]Session
-	activeSession string
-	config        *config.Config
-	state         *state.Manager
-	sshConfig     *sshconfig.Config
-	mu            sync.RWMutex
+	sessions       map[string]Session
+	activeSession  string
+	config         *config.Config
+	state          *state.Manager
+	sshConfig      *sshconfig.Config
+	commandTimeout time.Duration
+	mu             sync.RWMutex
 }
 
 // NewManager creates a new session manager
@@ -25,12 +27,19 @@ func NewManager(cfg *config.Config, stateMgr *state.Manager) *Manager {
 	// Load SSH config from ~/.ssh/config
 	sshCfg, _ := sshconfig.Load()
 
+	// Calculate command timeout from config (in seconds)
+	timeout := time.Duration(cfg.Settings.CommandTimeout) * time.Second
+	if timeout == 0 {
+		timeout = 300 * time.Second // Default 5 minutes
+	}
+
 	m := &Manager{
-		sessions:      make(map[string]Session),
-		activeSession: cfg.Settings.DefaultSession,
-		config:        cfg,
-		state:         stateMgr,
-		sshConfig:     sshCfg,
+		sessions:       make(map[string]Session),
+		activeSession:  cfg.Settings.DefaultSession,
+		config:         cfg,
+		state:          stateMgr,
+		sshConfig:      sshCfg,
+		commandTimeout: timeout,
 	}
 
 	// Initialize sessions from config
@@ -98,15 +107,19 @@ func (m *Manager) createSession(name string, cfg config.Session) Session {
 			}
 		}
 
-		return NewSSHSession(SSHConfig{
+		session := NewSSHSession(SSHConfig{
 			Name:    name,
 			Host:    host,
 			Port:    port,
 			User:    user,
 			KeyFile: keyFile,
+			Timeout: m.commandTimeout,
 		})
+		return session
 	default:
-		return NewLocalSession(name, cfg.Shell)
+		session := NewLocalSession(name, cfg.Shell)
+		session.SetTimeout(m.commandTimeout)
+		return session
 	}
 }
 

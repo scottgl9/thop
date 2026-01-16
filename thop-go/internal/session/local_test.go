@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestNewLocalSession(t *testing.T) {
@@ -311,5 +312,49 @@ func TestFormatPrompt(t *testing.T) {
 	prompt = FormatPrompt("prod")
 	if prompt != "(prod) $ " {
 		t.Errorf("expected '(prod) $ ', got '%s'", prompt)
+	}
+}
+
+func TestLocalSessionTimeout(t *testing.T) {
+	session := NewLocalSession("test", "")
+	session.SetTimeout(100 * time.Millisecond) // Very short timeout
+
+	// Run a command that takes longer than timeout
+	_, err := session.Execute("sleep 2")
+
+	if err == nil {
+		t.Fatal("expected timeout error")
+	}
+
+	sessionErr, ok := err.(*Error)
+	if !ok {
+		t.Fatalf("expected *Error, got %T", err)
+	}
+
+	if sessionErr.Code != ErrCommandTimeout {
+		t.Errorf("expected code %s, got %s", ErrCommandTimeout, sessionErr.Code)
+	}
+
+	if !sessionErr.Retryable {
+		t.Error("timeout error should be retryable")
+	}
+}
+
+func TestLocalSessionSetTimeout(t *testing.T) {
+	session := NewLocalSession("test", "")
+
+	// Default timeout should be 300 seconds
+	// We can't directly access the timeout field, but we can test that
+	// setting a new timeout works by running a command that would timeout
+
+	session.SetTimeout(50 * time.Millisecond)
+
+	// Quick command should succeed
+	result, err := session.Execute("echo fast")
+	if err != nil {
+		t.Fatalf("fast command should succeed: %v", err)
+	}
+	if strings.TrimSpace(result.Stdout) != "fast" {
+		t.Errorf("expected 'fast', got '%s'", result.Stdout)
 	}
 }

@@ -16,27 +16,29 @@ import (
 
 // SSHSession represents an SSH session to a remote host
 type SSHSession struct {
-	name       string
-	host       string
-	port       int
-	user       string
-	keyFile    string
-	client     *ssh.Client
-	cwd        string
-	env        map[string]string
-	connected  bool
-	timeout    time.Duration
+	name           string
+	host           string
+	port           int
+	user           string
+	keyFile        string
+	client         *ssh.Client
+	cwd            string
+	env            map[string]string
+	connected      bool
+	connectTimeout time.Duration
+	commandTimeout time.Duration
 }
 
 // SSHConfig contains SSH session configuration
 type SSHConfig struct {
-	Name     string
-	Host     string
-	Port     int
-	User     string
-	KeyFile  string
-	Password string // Optional, for auth command
-	Timeout  time.Duration
+	Name           string
+	Host           string
+	Port           int
+	User           string
+	KeyFile        string
+	Password       string        // Optional, for auth command
+	ConnectTimeout time.Duration // Connection timeout (default 30s)
+	Timeout        time.Duration // Command timeout (default 300s)
 }
 
 // NewSSHSession creates a new SSH session
@@ -44,18 +46,22 @@ func NewSSHSession(cfg SSHConfig) *SSHSession {
 	if cfg.Port == 0 {
 		cfg.Port = 22
 	}
+	if cfg.ConnectTimeout == 0 {
+		cfg.ConnectTimeout = 30 * time.Second
+	}
 	if cfg.Timeout == 0 {
-		cfg.Timeout = 30 * time.Second
+		cfg.Timeout = 300 * time.Second
 	}
 
 	return &SSHSession{
-		name:    cfg.Name,
-		host:    cfg.Host,
-		port:    cfg.Port,
-		user:    cfg.User,
-		keyFile: cfg.KeyFile,
-		env:     make(map[string]string),
-		timeout: cfg.Timeout,
+		name:           cfg.Name,
+		host:           cfg.Host,
+		port:           cfg.Port,
+		user:           cfg.User,
+		keyFile:        cfg.KeyFile,
+		env:            make(map[string]string),
+		connectTimeout: cfg.ConnectTimeout,
+		commandTimeout: cfg.Timeout,
 	}
 }
 
@@ -102,7 +108,7 @@ func (s *SSHSession) Connect() error {
 		User:            s.user,
 		Auth:            authMethods,
 		HostKeyCallback: hostKeyCallback,
-		Timeout:         s.timeout,
+		Timeout:         s.connectTimeout,
 	}
 
 	// Connect
@@ -185,8 +191,30 @@ func (s *SSHSession) executeRaw(cmdStr string) (*ExecuteResult, error) {
 	session.Stdout = &stdout
 	session.Stderr = &stderr
 
-	// Run command
-	err = session.Run(cmdStr)
+	// Create a channel for command completion
+	done := make(chan error, 1)
+
+	// Start command in goroutine
+	go func() {
+		done <- session.Run(cmdStr)
+	}()
+
+	// Wait for command or timeout
+	var runErr error
+	select {
+	case runErr = <-done:
+		// Command completed
+	case <-time.After(s.commandTimeout):
+		// Timeout - close the session to kill the command
+		session.Close()
+		return nil, &Error{
+			Code:      ErrCommandTimeout,
+			Message:   fmt.Sprintf("Command timed out after %s", s.commandTimeout),
+			Session:   s.name,
+			Host:      s.host,
+			Retryable: true,
+		}
+	}
 
 	result := &ExecuteResult{
 		Stdout:   stdout.String(),
@@ -194,11 +222,11 @@ func (s *SSHSession) executeRaw(cmdStr string) (*ExecuteResult, error) {
 		ExitCode: 0,
 	}
 
-	if err != nil {
-		if exitErr, ok := err.(*ssh.ExitError); ok {
+	if runErr != nil {
+		if exitErr, ok := runErr.(*ssh.ExitError); ok {
 			result.ExitCode = exitErr.ExitStatus()
 		} else {
-			return nil, err
+			return nil, runErr
 		}
 	}
 

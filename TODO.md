@@ -115,8 +115,8 @@ After language selection, implement full MVP in chosen language.
 - [x] State survives thop restart
 
 ### Command Handling
-- [ ] Configurable command timeout (default: 300s)
-- [ ] Kill and report on timeout
+- [x] Configurable command timeout (default: 300s)
+- [x] Kill and report on timeout
 - [ ] Signal forwarding (Ctrl+C to active session)
 
 ---
@@ -196,11 +196,11 @@ After language selection, implement full MVP in chosen language.
 
 ## Documentation Tasks
 
-- [ ] README.md with quick start guide
-- [ ] Installation instructions
-- [ ] Configuration reference
-- [ ] Integration guide for Claude Code
-- [ ] Troubleshooting guide
+- [x] README.md with quick start guide
+- [x] Installation instructions
+- [x] Configuration reference
+- [x] Integration guide for Claude Code
+- [x] Troubleshooting guide
 
 ---
 
