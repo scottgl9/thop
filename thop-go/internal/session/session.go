@@ -1,6 +1,7 @@
 package session
 
 import (
+	"context"
 	"fmt"
 	"io"
 )
@@ -24,6 +25,9 @@ type Session interface {
 
 	// Execute runs a command and returns the output
 	Execute(cmd string) (*ExecuteResult, error)
+
+	// ExecuteWithContext runs a command with cancellation support
+	ExecuteWithContext(ctx context.Context, cmd string) (*ExecuteResult, error)
 
 	// GetCWD returns the current working directory
 	GetCWD() string
@@ -69,6 +73,7 @@ const (
 	ErrHostKeyVerification  = "HOST_KEY_VERIFICATION_FAILED"
 	ErrHostKeyChanged       = "HOST_KEY_CHANGED"
 	ErrCommandTimeout       = "COMMAND_TIMEOUT"
+	ErrCommandInterrupted   = "COMMAND_INTERRUPTED"
 	ErrSessionNotFound      = "SESSION_NOT_FOUND"
 	ErrSessionDisconnected  = "SESSION_DISCONNECTED"
 )

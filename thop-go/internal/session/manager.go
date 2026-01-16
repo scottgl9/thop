@@ -1,6 +1,7 @@
 package session
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"sync"
@@ -258,6 +259,11 @@ func (m *Manager) Disconnect(name string) error {
 
 // Execute executes a command on the active session
 func (m *Manager) Execute(cmd string) (*ExecuteResult, error) {
+	return m.ExecuteWithContext(context.Background(), cmd)
+}
+
+// ExecuteWithContext executes a command on the active session with cancellation support
+func (m *Manager) ExecuteWithContext(ctx context.Context, cmd string) (*ExecuteResult, error) {
 	session := m.GetActiveSession()
 	if session == nil {
 		logger.Warn("execute failed: no active session")
@@ -268,10 +274,10 @@ func (m *Manager) Execute(cmd string) (*ExecuteResult, error) {
 	}
 
 	logger.Debug("executing on session %q: %s", session.Name(), cmd)
-	result, err := session.Execute(cmd)
+	result, err := session.ExecuteWithContext(ctx, cmd)
 
-	// For SSH sessions, try to reconnect on connection errors
-	if err != nil && session.Type() == "ssh" {
+	// For SSH sessions, try to reconnect on connection errors (but not if context was cancelled)
+	if err != nil && session.Type() == "ssh" && ctx.Err() == nil {
 		if sessionErr, ok := err.(*Error); ok && sessionErr.Retryable {
 			if sessionErr.Code == ErrSessionDisconnected || sessionErr.Code == ErrConnectionFailed {
 				logger.Info("connection lost on session %q, attempting reconnect", session.Name())
@@ -279,7 +285,7 @@ func (m *Manager) Execute(cmd string) (*ExecuteResult, error) {
 				if reconnectErr := m.attemptReconnect(session); reconnectErr == nil {
 					// Retry the command after successful reconnection
 					logger.Debug("retrying command after reconnect: %s", cmd)
-					result, err = session.Execute(cmd)
+					result, err = session.ExecuteWithContext(ctx, cmd)
 				}
 			}
 		}

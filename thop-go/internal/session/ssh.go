@@ -2,6 +2,7 @@ package session
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net"
 	"os"
@@ -187,6 +188,12 @@ func (s *SSHSession) Reconnect() error {
 
 // Execute runs a command over SSH
 func (s *SSHSession) Execute(cmdStr string) (*ExecuteResult, error) {
+	ctx := context.Background()
+	return s.ExecuteWithContext(ctx, cmdStr)
+}
+
+// ExecuteWithContext runs a command over SSH with cancellation support
+func (s *SSHSession) ExecuteWithContext(ctx context.Context, cmdStr string) (*ExecuteResult, error) {
 	if !s.IsConnected() {
 		return nil, &Error{
 			Code:       ErrSessionDisconnected,
@@ -207,11 +214,16 @@ func (s *SSHSession) Execute(cmdStr string) (*ExecuteResult, error) {
 		cmdStr = fmt.Sprintf("cd %s && %s", s.cwd, cmdStr)
 	}
 
-	return s.executeRaw(cmdStr)
+	return s.executeRawWithContext(ctx, cmdStr)
 }
 
 // executeRaw executes a command without cwd handling
 func (s *SSHSession) executeRaw(cmdStr string) (*ExecuteResult, error) {
+	return s.executeRawWithContext(context.Background(), cmdStr)
+}
+
+// executeRawWithContext executes a command with context cancellation support
+func (s *SSHSession) executeRawWithContext(ctx context.Context, cmdStr string) (*ExecuteResult, error) {
 	session, err := s.client.NewSession()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create session: %w", err)
@@ -236,11 +248,23 @@ func (s *SSHSession) executeRaw(cmdStr string) (*ExecuteResult, error) {
 		done <- session.Run(cmdStr)
 	}()
 
-	// Wait for command or timeout
+	// Wait for command, context cancellation, or timeout
 	var runErr error
 	select {
 	case runErr = <-done:
 		// Command completed
+	case <-ctx.Done():
+		// Context cancelled (user interrupt)
+		logger.Debug("SSH command interrupted on %q", s.name)
+		// Send SIGINT to the remote process
+		session.Signal(ssh.SIGINT)
+		// Give a brief moment for clean termination
+		time.Sleep(100 * time.Millisecond)
+		session.Close()
+		return &ExecuteResult{
+			Stderr:   "^C\n",
+			ExitCode: 130, // Standard exit code for SIGINT
+		}, nil
 	case <-time.After(s.commandTimeout):
 		// Timeout - close the session to kill the command
 		logger.Warn("SSH command timed out after %s on %q", s.commandTimeout, s.name)

@@ -114,10 +114,10 @@ After language selection, implement full MVP in chosen language.
 - [ ] Replay environment on reconnect
 - [x] State survives thop restart
 
-### Command Handling
+### Command Handling ✅
 - [x] Configurable command timeout (default: 300s)
 - [x] Kill and report on timeout
-- [ ] Signal forwarding (Ctrl+C to active session)
+- [x] Signal forwarding (Ctrl+C to active session)
 
 ---
 

@@ -1,11 +1,14 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/chzyer/readline"
 	"github.com/scottgl9/thop/internal/session"
@@ -109,8 +112,8 @@ func (a *App) runInteractive() error {
 			continue
 		}
 
-		// Execute command
-		result, err := a.sessions.Execute(input)
+		// Execute command with signal forwarding
+		result, err := a.executeWithSignalForwarding(input)
 		if err != nil {
 			a.outputError(err)
 			continue
@@ -130,6 +133,31 @@ func (a *App) runInteractive() error {
 			}
 		}
 	}
+}
+
+// executeWithSignalForwarding executes a command with Ctrl+C forwarding
+func (a *App) executeWithSignalForwarding(cmd string) (*session.ExecuteResult, error) {
+	// Create a cancellable context
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Set up signal handling for SIGINT
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT)
+	defer signal.Stop(sigChan)
+
+	// Run signal handler in goroutine
+	go func() {
+		select {
+		case <-sigChan:
+			// Ctrl+C received - cancel the context
+			cancel()
+		case <-ctx.Done():
+			// Context already cancelled
+		}
+	}()
+
+	return a.sessions.ExecuteWithContext(ctx, cmd)
 }
 
 // runInteractiveSimple runs interactive mode without readline (fallback)
@@ -168,7 +196,7 @@ func (a *App) runInteractiveSimple() error {
 			continue
 		}
 
-		result, err := a.sessions.Execute(input)
+		result, err := a.executeWithSignalForwarding(input)
 		if err != nil {
 			a.outputError(err)
 			continue

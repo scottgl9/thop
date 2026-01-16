@@ -80,18 +80,25 @@ func (s *LocalSession) IsConnected() bool {
 
 // Execute runs a command in the local shell
 func (s *LocalSession) Execute(cmdStr string) (*ExecuteResult, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), s.timeout)
+	defer cancel()
+	return s.ExecuteWithContext(ctx, cmdStr)
+}
+
+// ExecuteWithContext runs a command with cancellation support
+func (s *LocalSession) ExecuteWithContext(ctx context.Context, cmdStr string) (*ExecuteResult, error) {
 	// Handle cd commands specially to track cwd
 	trimmedCmd := strings.TrimSpace(cmdStr)
 	if trimmedCmd == "cd" || strings.HasPrefix(trimmedCmd, "cd ") {
 		return s.handleCD(cmdStr)
 	}
 
-	// Create context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), s.timeout)
+	// Create context with timeout if not already set
+	execCtx, cancel := context.WithTimeout(ctx, s.timeout)
 	defer cancel()
 
 	// Create the command with context
-	cmd := exec.CommandContext(ctx, s.shell, "-c", cmdStr)
+	cmd := exec.CommandContext(execCtx, s.shell, "-c", cmdStr)
 	cmd.Dir = s.cwd
 
 	// Set environment
@@ -115,8 +122,16 @@ func (s *LocalSession) Execute(cmdStr string) (*ExecuteResult, error) {
 	}
 
 	if err != nil {
+		// Check if context was cancelled (user interrupt)
+		if ctx.Err() == context.Canceled {
+			logger.Debug("local command interrupted on %q", s.name)
+			return &ExecuteResult{
+				Stderr:   "^C\n",
+				ExitCode: 130, // Standard exit code for SIGINT
+			}, nil
+		}
 		// Check if timeout was exceeded
-		if ctx.Err() == context.DeadlineExceeded {
+		if execCtx.Err() == context.DeadlineExceeded {
 			logger.Warn("local command timed out after %s on %q", s.timeout, s.name)
 			return nil, &Error{
 				Code:      ErrCommandTimeout,
