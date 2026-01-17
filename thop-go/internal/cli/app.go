@@ -40,6 +40,7 @@ type App struct {
 	configPath   string
 	proxyMode    bool
 	proxyCommand string // Command to execute in proxy mode (-c flag)
+	mcpMode      bool   // Run as MCP server
 	jsonOutput   bool
 	showStatus   bool
 	completions  string // Shell name for completions
@@ -127,7 +128,9 @@ func (a *App) Run(args []string) error {
 	}
 
 	// Run in appropriate mode
-	if a.proxyMode {
+	if a.mcpMode {
+		return a.runMCP()
+	} else if a.proxyMode {
 		return a.runProxy()
 	}
 
@@ -142,6 +145,7 @@ func (a *App) parseFlags(args []string) error {
 	var showHelp bool
 
 	flags.BoolVar(&a.proxyMode, "proxy", false, "Run in proxy mode (for AI agents)")
+	flags.BoolVar(&a.mcpMode, "mcp", false, "Run as MCP server")
 	flags.StringVar(&a.proxyCommand, "c", "", "Execute command (for shell compatibility)")
 	flags.BoolVar(&a.showStatus, "status", false, "Show status and exit")
 	flags.StringVar(&a.configPath, "config", "", "Path to config file")
@@ -199,11 +203,13 @@ func (a *App) printHelp() {
 USAGE:
     thop [OPTIONS]              Start interactive mode
     thop --proxy                Start proxy mode (for AI agents)
+    thop --mcp                  Start MCP server mode
     thop -c "command"           Execute command and exit
     thop --status               Show status and exit
 
 OPTIONS:
     --proxy           Run in proxy mode (SHELL compatible)
+    --mcp             Run as MCP (Model Context Protocol) server
     -c <command>      Execute command and exit with its exit code
     --status          Show all sessions and exit
     --config <path>   Use alternate config file
