@@ -77,8 +77,6 @@ func (s *Server) registerHandlers() {
 	s.handlers["tools/call"] = s.handleToolCall
 	s.handlers["resources/list"] = s.handleResourcesList
 	s.handlers["resources/read"] = s.handleResourceRead
-	s.handlers["prompts/list"] = s.handlePromptsList
-	s.handlers["prompts/get"] = s.handlePromptGet
 	s.handlers["ping"] = s.handlePing
 
 	// Notification handlers

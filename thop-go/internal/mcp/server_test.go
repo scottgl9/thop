@@ -101,10 +101,6 @@ func TestMCPServer_Initialize(t *testing.T) {
 	if initResult.Capabilities.Resources == nil {
 		t.Error("Resources capability not set")
 	}
-
-	if initResult.Capabilities.Prompts == nil {
-		t.Error("Prompts capability not set")
-	}
 }
 
 func TestMCPServer_ToolsList(t *testing.T) {
@@ -310,70 +306,6 @@ func TestMCPServer_ResourcesList(t *testing.T) {
 	}
 }
 
-func TestMCPServer_PromptsList(t *testing.T) {
-	// Create test configuration
-	cfg := &config.Config{
-		Settings: config.Settings{
-			DefaultSession: "local",
-		},
-		Sessions: map[string]config.Session{
-			"local": {
-				Type:  "local",
-				Shell: "/bin/bash",
-			},
-		},
-	}
-
-	// Create state manager
-	stateMgr := state.NewManager("/tmp/test-state.json")
-
-	// Create session manager
-	sessionMgr := session.NewManager(cfg, stateMgr)
-
-	// Create MCP server
-	server := NewServer(cfg, sessionMgr, stateMgr)
-
-	// Test prompts/list
-	ctx := context.Background()
-	result, err := server.handlePromptsList(ctx, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Check result
-	promptsResult, ok := result.(map[string]interface{})
-	if !ok {
-		t.Fatal("Invalid prompts list result type")
-	}
-
-	prompts, ok := promptsResult["prompts"].([]Prompt)
-	if !ok {
-		t.Fatal("Invalid prompts array type")
-	}
-
-	// Check we have prompts
-	if len(prompts) == 0 {
-		t.Error("No prompts returned")
-	}
-
-	// Check for specific prompts
-	promptNames := make(map[string]bool)
-	for _, prompt := range prompts {
-		promptNames[prompt.Name] = true
-	}
-
-	expectedPrompts := []string{
-		"deploy",
-		"debug",
-		"backup",
-	}
-
-	for _, expected := range expectedPrompts {
-		if !promptNames[expected] {
-			t.Errorf("Expected prompt %s not found", expected)
-		}
-	}
-}
 
 func TestMCPServer_Ping(t *testing.T) {
 	// Create test configuration
@@ -529,23 +461,6 @@ func TestMCPServer_ResourceRead(t *testing.T) {
 	}
 }
 
-func TestMCPServer_PromptGet(t *testing.T) {
-	srv := createTestServer()
-	tests := []struct{ name string; args string; wantErr bool }{
-		{"deploy", `{"server":"s","branch":"main"}`, false},
-		{"debug", `{"server":"s","service":"api"}`, false},
-		{"backup", `{"server":"s","path":"/data"}`, false},
-		{"unknown", `{}`, true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := srv.handlePromptGet(context.Background(), json.RawMessage(`{"name":"`+tt.name+`","arguments":`+tt.args+`}`))
-			if (err != nil) != tt.wantErr {
-				t.Errorf("wantErr=%v, got err=%v", tt.wantErr, err)
-			}
-		})
-	}
-}
 
 func TestMCPServer_Notifications(t *testing.T) {
 	srv := createTestServer()
@@ -700,13 +615,6 @@ func TestMCPServer_ResourceRead_InvalidParamsError(t *testing.T) {
 	}
 }
 
-func TestMCPServer_PromptGet_InvalidParamsError(t *testing.T) {
-	srv := createTestServer()
-	_, err := srv.handlePromptGet(context.Background(), json.RawMessage(`{invalid}`))
-	if err == nil {
-		t.Error("Expected error for invalid params")
-	}
-}
 
 func TestMCPServer_HandleInitialize_InvalidParamsError(t *testing.T) {
 	srv := createTestServer()
