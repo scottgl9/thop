@@ -161,15 +161,18 @@ func TestMCPServer_ToolsList(t *testing.T) {
 
 	expectedTools := []string{
 		"connect", "switch", "close", "status",
-		"execute", "readFile", "writeFile",
-		"getEnvironment", "setEnvironment",
-		"getCwd", "setCwd",
+		"execute", "executeBackground",
 	}
 
 	for _, expected := range expectedTools {
 		if !toolNames[expected] {
 			t.Errorf("Expected tool %s not found", expected)
 		}
+	}
+
+	// Ensure we only have these 6 tools
+	if len(tools) != 6 {
+		t.Errorf("Expected exactly 6 tools, got %d", len(tools))
 	}
 }
 
