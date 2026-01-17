@@ -409,3 +409,7 @@ thop-go/
 ## License
 
 Apache License 2.0 - see [LICENSE](LICENSE) file for details.
+
+## Author
+
+Scott Glover <scottgl@gmail.com>
