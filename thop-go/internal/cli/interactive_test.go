@@ -1025,3 +1025,22 @@ func TestFormatDuration(t *testing.T) {
 func parseDurationForTest(s string) (time.Duration, error) {
 	return time.ParseDuration(s)
 }
+
+func TestHandleSlashCommandShell(t *testing.T) {
+	app := createInteractiveTestApp(t)
+
+	// Shell without argument
+	err := app.handleSlashCommand("/shell")
+	if err == nil {
+		t.Error("expected error for /shell without argument")
+	}
+
+	// Shell alias without argument
+	err = app.handleSlashCommand("/sh")
+	if err == nil {
+		t.Error("expected error for /sh without argument")
+	}
+
+	// Note: Can't fully test interactive commands in unit tests
+	// because they require a real TTY
+}

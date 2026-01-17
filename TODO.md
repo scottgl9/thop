@@ -164,8 +164,8 @@ After language selection, implement full MVP in chosen language.
 ## Phase 4: Advanced Features
 
 ### Interactive Improvements
-- [ ] PTY support for interactive commands (vim, top)
-- [ ] Window resize handling (SIGWINCH)
+- [x] PTY support for interactive commands (vim, top) via /shell command
+- [x] Window resize handling (SIGWINCH)
 - [x] Command history per session
 
 ### Async Features

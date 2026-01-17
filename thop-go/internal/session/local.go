@@ -3,12 +3,17 @@ package session
 import (
 	"bytes"
 	"context"
+	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
+	"github.com/creack/pty"
 	"github.com/scottgl9/thop/internal/logger"
+	"golang.org/x/term"
 )
 
 // LocalSession represents a local shell session
@@ -198,6 +203,103 @@ func (s *LocalSession) ExecuteWithContext(ctx context.Context, cmdStr string) (*
 	}
 
 	return result, nil
+}
+
+// ExecuteInteractive runs a command with PTY support for interactive programs
+func (s *LocalSession) ExecuteInteractive(cmdStr string) (int, error) {
+	// Create the command
+	cmd := exec.Command(s.shell, "-c", cmdStr)
+	cmd.Dir = s.cwd
+
+	// Set environment
+	cmd.Env = os.Environ()
+	for k, v := range s.env {
+		cmd.Env = append(cmd.Env, k+"="+v)
+	}
+
+	// Ensure TERM is set
+	hasTerm := false
+	for _, e := range cmd.Env {
+		if strings.HasPrefix(e, "TERM=") {
+			hasTerm = true
+			break
+		}
+	}
+	if !hasTerm {
+		cmd.Env = append(cmd.Env, "TERM=xterm-256color")
+	}
+
+	// Start with a PTY
+	ptmx, err := pty.Start(cmd)
+	if err != nil {
+		return 1, err
+	}
+	defer ptmx.Close()
+
+	// Get terminal fd
+	fd := int(os.Stdin.Fd())
+
+	// Handle window resize (SIGWINCH)
+	sigwinchCh := make(chan os.Signal, 1)
+	signal.Notify(sigwinchCh, syscall.SIGWINCH)
+	defer signal.Stop(sigwinchCh)
+
+	// Initial resize
+	if term.IsTerminal(fd) {
+		if err := pty.InheritSize(os.Stdin, ptmx); err != nil {
+			logger.Debug("Failed to set initial PTY size: %v", err)
+		}
+	}
+
+	// Start goroutine to handle resize events
+	go func() {
+		for range sigwinchCh {
+			if err := pty.InheritSize(os.Stdin, ptmx); err != nil {
+				logger.Debug("Failed to resize PTY: %v", err)
+			}
+		}
+	}()
+
+	// Put terminal in raw mode
+	var oldState *term.State
+	if term.IsTerminal(fd) {
+		oldState, err = term.MakeRaw(fd)
+		if err != nil {
+			logger.Debug("Failed to set raw mode: %v", err)
+		}
+	}
+
+	// Restore terminal on exit
+	defer func() {
+		if oldState != nil {
+			term.Restore(fd, oldState)
+		}
+	}()
+
+	// Copy stdin to PTY
+	go func() {
+		io.Copy(ptmx, os.Stdin)
+	}()
+
+	// Copy PTY to stdout
+	io.Copy(os.Stdout, ptmx)
+
+	// Wait for command to complete
+	err = cmd.Wait()
+
+	exitCode := 0
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			exitCode = exitErr.ExitCode()
+		} else {
+			// PTY closed errors are normal when the process exits
+			if !strings.Contains(err.Error(), "input/output error") {
+				return 1, err
+			}
+		}
+	}
+
+	return exitCode, nil
 }
 
 // handleCD handles cd commands to track working directory

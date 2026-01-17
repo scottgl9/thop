@@ -272,6 +272,7 @@ With agent forwarding enabled, you can use git over SSH, SSH to other servers, o
 | `/read <path>` | `/cat` | Read file contents from current session |
 | `/write <path> <content>` | | Write content to file on current session |
 | `/env [KEY=VALUE]` | | Show or set environment variables |
+| `/shell <command>` | `/sh` | Run interactive command with PTY (vim, top) |
 | `/bg <command>` | | Run command in background |
 | `/jobs` | | List background jobs |
 | `/fg <job_id>` | | Wait for job and show output |

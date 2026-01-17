@@ -93,6 +93,8 @@ func (a *App) runInteractive() error {
 		readline.PcItem("/jobs"),
 		readline.PcItem("/fg"),
 		readline.PcItem("/kill"),
+		readline.PcItem("/shell"),
+		readline.PcItem("/sh"),
 		readline.PcItem("/local"),
 		readline.PcItem("/status"),
 		readline.PcItem("/help"),
@@ -402,6 +404,12 @@ func (a *App) handleSlashCommand(input string) error {
 		}
 		return a.cmdKillJob(args[0])
 
+	case "/shell", "/sh":
+		if len(args) == 0 {
+			return fmt.Errorf("usage: /shell <command>\n  Runs command with PTY support for interactive programs (vim, top, etc.)")
+		}
+		return a.cmdShell(strings.Join(args, " "))
+
 	default:
 		return fmt.Errorf("unknown command: %s (use /help for available commands)", cmd)
 	}
@@ -459,6 +467,7 @@ func (a *App) printSlashHelp() {
   /read <path>        Read file contents (from current session)
   /write <path> <content>  Write content to file (on current session)
   /env [KEY=VALUE]    Show or set environment variables
+  /shell <command>    Run interactive command with PTY (vim, top, etc.)
   /bg <command>       Run command in background
   /jobs               List background jobs
   /fg <job_id>        Wait for job and show output
@@ -475,6 +484,7 @@ Shortcuts:
   /cp   = /copy
   /add  = /add-session
   /cat  = /read
+  /sh   = /shell
   /q    = /exit
 
 Copy examples:
@@ -490,6 +500,12 @@ File access (works on remote sessions via SFTP):
   /read /etc/hostname            Read remote file contents
   /write /tmp/test.txt Hello     Write "Hello" to remote file
 
+Interactive commands (PTY support):
+  /shell vim file.txt            Edit file with vim
+  /shell top                     Run interactive top
+  /shell htop                    Run htop (if installed)
+  /sh bash                       Start interactive bash shell
+
 Background jobs:
   /bg sleep 60                   Run 'sleep 60' in background
   /jobs                          List all background jobs
@@ -501,6 +517,43 @@ Keyboard shortcuts:
   Ctrl+C  Interrupt running command
   Up/Down History navigation
   Tab     Auto-complete commands`)
+}
+
+// cmdShell handles the /shell command for running interactive programs
+func (a *App) cmdShell(command string) error {
+	// Close readline temporarily to avoid interference
+	if a.rl != nil {
+		a.rl.Close()
+	}
+
+	// Run the interactive command
+	exitCode, err := a.sessions.ExecuteInteractive(command)
+
+	// Restore readline
+	if a.rl != nil {
+		// Reinitialize readline after interactive command
+		historyFile := getHistoryFile(a.sessions.GetActiveSessionName())
+		newRl, rlErr := readline.NewEx(&readline.Config{
+			Prompt:            a.getPrompt(),
+			HistoryFile:       historyFile,
+			InterruptPrompt:   "^C",
+			EOFPrompt:         "exit",
+			HistorySearchFold: true,
+		})
+		if rlErr == nil {
+			a.rl = newRl
+		}
+	}
+
+	if err != nil {
+		return err
+	}
+
+	if exitCode != 0 {
+		fmt.Printf("Command exited with code %d\n", exitCode)
+	}
+
+	return nil
 }
 
 // cmdConnect handles the /connect command

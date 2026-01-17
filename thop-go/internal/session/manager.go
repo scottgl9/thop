@@ -439,6 +439,21 @@ func (m *Manager) ExecuteOn(sessionName, cmd string) (*ExecuteResult, error) {
 	return session.Execute(cmd)
 }
 
+// ExecuteInteractive executes a command on the active session with PTY support
+func (m *Manager) ExecuteInteractive(cmd string) (int, error) {
+	session := m.GetActiveSession()
+	if session == nil {
+		logger.Warn("execute interactive failed: no active session")
+		return 1, &Error{
+			Code:    ErrSessionNotFound,
+			Message: "No active session",
+		}
+	}
+
+	logger.Debug("executing interactive on session %q: %s", session.Name(), cmd)
+	return session.ExecuteInteractive(cmd)
+}
+
 // ListSessions returns information about all sessions
 func (m *Manager) ListSessions() []SessionInfo {
 	m.mu.RLock()

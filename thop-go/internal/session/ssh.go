@@ -7,8 +7,10 @@ import (
 	"io"
 	"net"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/pkg/sftp"
@@ -16,6 +18,7 @@ import (
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
 	"golang.org/x/crypto/ssh/knownhosts"
+	"golang.org/x/term"
 )
 
 // SSHSession represents an SSH session to a remote host
@@ -496,6 +499,122 @@ func (s *SSHSession) executeRawWithContext(ctx context.Context, cmdStr string) (
 	}
 
 	return result, nil
+}
+
+// ExecuteInteractive runs a command with PTY support for interactive programs
+// This connects stdin/stdout/stderr directly to the user's terminal
+func (s *SSHSession) ExecuteInteractive(cmdStr string) (int, error) {
+	if !s.IsConnected() {
+		return 1, &Error{
+			Code:       ErrSessionDisconnected,
+			Message:    fmt.Sprintf("Session %s is not connected", s.name),
+			Session:    s.name,
+			Retryable:  true,
+			Suggestion: fmt.Sprintf("Use /connect %s to reconnect", s.name),
+		}
+	}
+
+	session, err := s.client.NewSession()
+	if err != nil {
+		return 1, fmt.Errorf("failed to create session: %w", err)
+	}
+	defer session.Close()
+
+	// Request agent forwarding if enabled
+	if s.agentForwarding {
+		if err := agent.RequestAgentForwarding(session); err != nil {
+			logger.Debug("SSH agent forwarding request failed: %v", err)
+		}
+	}
+
+	// Get terminal size
+	fd := int(os.Stdin.Fd())
+	width, height := 80, 24 // defaults
+	if term.IsTerminal(fd) {
+		if w, h, err := term.GetSize(fd); err == nil {
+			width, height = w, h
+		}
+	}
+
+	// Request a PTY with terminal type and size
+	termType := os.Getenv("TERM")
+	if termType == "" {
+		termType = "xterm-256color"
+	}
+
+	modes := ssh.TerminalModes{
+		ssh.ECHO:          1,     // Enable echo
+		ssh.TTY_OP_ISPEED: 14400, // Input speed = 14.4kbaud
+		ssh.TTY_OP_OSPEED: 14400, // Output speed = 14.4kbaud
+	}
+
+	if err := session.RequestPty(termType, height, width, modes); err != nil {
+		return 1, fmt.Errorf("failed to request PTY: %w", err)
+	}
+
+	// Connect stdin, stdout, stderr
+	session.Stdin = os.Stdin
+	session.Stdout = os.Stdout
+	session.Stderr = os.Stderr
+
+	// Put terminal in raw mode
+	var oldState *term.State
+	if term.IsTerminal(fd) {
+		oldState, err = term.MakeRaw(fd)
+		if err != nil {
+			logger.Debug("Failed to set raw mode: %v", err)
+		}
+	}
+
+	// Restore terminal on exit
+	defer func() {
+		if oldState != nil {
+			term.Restore(fd, oldState)
+		}
+	}()
+
+	// Handle window resize (SIGWINCH)
+	sigwinchCh := make(chan os.Signal, 1)
+	signal.Notify(sigwinchCh, syscall.SIGWINCH)
+	defer signal.Stop(sigwinchCh)
+
+	// Start goroutine to handle resize events
+	go func() {
+		for range sigwinchCh {
+			if w, h, err := term.GetSize(fd); err == nil {
+				session.WindowChange(h, w)
+			}
+		}
+	}()
+
+	// Build command with cwd and environment
+	fullCmd := cmdStr
+	if s.cwd != "" && s.cwd != "~" {
+		fullCmd = fmt.Sprintf("cd %s && %s", s.cwd, cmdStr)
+	}
+
+	// Add environment variables
+	var envPrefix strings.Builder
+	envPrefix.WriteString("export TERM=" + termType + "; ")
+	for k, v := range s.env {
+		escapedVal := strings.ReplaceAll(v, "'", "'\\''")
+		envPrefix.WriteString(fmt.Sprintf("export %s='%s'; ", k, escapedVal))
+	}
+	fullCmd = envPrefix.String() + fullCmd
+
+	// Run the command
+	err = session.Run(fullCmd)
+
+	exitCode := 0
+	if err != nil {
+		if exitErr, ok := err.(*ssh.ExitError); ok {
+			exitCode = exitErr.ExitStatus()
+		} else {
+			return 1, err
+		}
+	}
+
+	return exitCode, nil
 }
 
 // handleCD handles cd commands

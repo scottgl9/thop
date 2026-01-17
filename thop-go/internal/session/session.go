@@ -31,6 +31,11 @@ type Session interface {
 	// ExecuteWithContext runs a command with cancellation support
 	ExecuteWithContext(ctx context.Context, cmd string) (*ExecuteResult, error)
 
+	// ExecuteInteractive runs a command with PTY support for interactive programs
+	// stdin, stdout, stderr are connected directly to the user's terminal
+	// Returns exit code and error
+	ExecuteInteractive(cmd string) (int, error)
+
 	// GetCWD returns the current working directory
 	GetCWD() string
 
