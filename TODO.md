@@ -42,10 +42,13 @@ Both Go and Rust prototypes implemented and tested.
 After language selection, implement full MVP in chosen language.
 
 ### Interactive Mode ✅
-- [x] Full interactive shell with `(session) $` prompt
+- [x] Full interactive shell with `(session) cwd $` prompt
+- [x] Current working directory shown in prompt
+- [x] Home directory shortened to ~ in prompt
 - [x] Readline support (history, line editing)
 - [x] Proper terminal handling
 - [x] Graceful exit on Ctrl+D
+- [x] Auto-switch to session after `/connect`
 
 ### Local Session ✅
 - [x] Local shell session management
@@ -68,6 +71,13 @@ After language selection, implement full MVP in chosen language.
 - [x] `/status` - Show all sessions with state
 - [x] `/close <session>` - Close SSH connection
 - [x] `/help` - Show all commands with descriptions
+- [x] `/auth <session>` - Provide password interactively
+- [x] `/trust <session>` - Trust host key
+- [x] `/copy <src> <dst>` - Copy files between sessions
+- [x] `/add-session <name> <host>` - Add SSH session to config
+- [x] `/read <path>` - Read file contents from session
+- [x] `/write <path> <content>` - Write content to file
+- [x] `/env [KEY=VALUE]` - Show or set environment variables
 
 ### Proxy Mode ✅
 - [x] `thop --proxy` for AI agent integration
@@ -131,8 +141,8 @@ After language selection, implement full MVP in chosen language.
 
 ### Authentication
 - [x] `/auth <session>` - Provide password interactively
-- [ ] Password from environment variable
-- [ ] Password from file (0600 perms required)
+- [x] Password from environment variable (`password_env` config)
+- [x] Password from file (`password_file`, 0600 perms required)
 - [x] `/trust <session>` - Trust host key
 - [x] Display fingerprint before trusting
 

@@ -34,6 +34,8 @@ type Session struct {
 	IdentityFile    string   `toml:"identity_file,omitempty"`
 	JumpHost        string   `toml:"jump_host,omitempty"`
 	AgentForwarding bool     `toml:"agent_forwarding,omitempty"`
+	PasswordEnv     string   `toml:"password_env,omitempty"`  // Environment variable containing password
+	PasswordFile    string   `toml:"password_file,omitempty"` // File containing password (must be 0600)
 	StartupCommands []string `toml:"startup_commands,omitempty"`
 }
 

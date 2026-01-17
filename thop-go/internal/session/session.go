@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
+	"strings"
 )
 
 // Session interface defines the contract for all session types
@@ -94,6 +96,28 @@ func CopyOutput(dst io.Writer, src io.Reader) error {
 }
 
 // FormatPrompt formats the prompt for a session
-func FormatPrompt(sessionName string) string {
-	return fmt.Sprintf("(%s) $ ", sessionName)
+// If cwd is provided, it will be shown after the session name
+// The cwd is shortened: home directory becomes ~, long paths are truncated
+func FormatPrompt(sessionName, cwd string) string {
+	if cwd == "" {
+		return fmt.Sprintf("(%s) $ ", sessionName)
+	}
+
+	// Shorten home directory to ~
+	displayCwd := cwd
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		if displayCwd == home {
+			displayCwd = "~"
+		} else if strings.HasPrefix(displayCwd, home+"/") {
+			displayCwd = "~" + displayCwd[len(home):]
+		}
+	}
+
+	// Truncate long paths to show only last 3 components
+	parts := strings.Split(displayCwd, "/")
+	if len(parts) > 4 && !strings.HasPrefix(displayCwd, "~") {
+		displayCwd = ".../" + strings.Join(parts[len(parts)-3:], "/")
+	}
+
+	return fmt.Sprintf("(%s) %s $ ", sessionName, displayCwd)
 }

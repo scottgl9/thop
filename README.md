@@ -104,6 +104,39 @@ startup_commands = [
 ]
 ```
 
+### Password Authentication
+
+For servers requiring password authentication, you can provide the password in several ways:
+
+**Via environment variable:**
+
+```toml
+[sessions.legacy]
+type = "ssh"
+host = "legacy.example.com"
+user = "admin"
+password_env = "LEGACY_SSH_PASSWORD"  # Reads from $LEGACY_SSH_PASSWORD
+```
+
+**Via password file (must have 0600 permissions):**
+
+```toml
+[sessions.legacy]
+type = "ssh"
+host = "legacy.example.com"
+user = "admin"
+password_file = "~/.ssh/legacy_password"  # File must be chmod 0600
+```
+
+**Interactively via /auth command:**
+
+```bash
+(local) $ /auth legacy
+Password:
+Password set for legacy
+(local) $ /connect legacy
+```
+
 ### Startup Commands
 
 You can configure commands to run automatically when connecting to a session:

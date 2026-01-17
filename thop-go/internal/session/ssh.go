@@ -46,6 +46,8 @@ type SSHConfig struct {
 	User            string
 	KeyFile         string
 	Password        string        // Optional, for auth command
+	PasswordEnv     string        // Environment variable containing password
+	PasswordFile    string        // File containing password (must be 0600)
 	JumpHost        string        // Jump host for ProxyJump (format: user@host:port or just host)
 	AgentForwarding bool          // Whether to forward SSH agent to remote
 	ConnectTimeout  time.Duration // Connection timeout (default 30s)
@@ -65,12 +67,49 @@ func NewSSHSession(cfg SSHConfig) *SSHSession {
 		cfg.Timeout = 300 * time.Second
 	}
 
-	return &SSHSession{
+	// Resolve password from config, environment variable, or file
+	password := cfg.Password
+	if password == "" && cfg.PasswordEnv != "" {
+		password = os.Getenv(cfg.PasswordEnv)
+		if password != "" {
+			logger.Debug("SSH session %q: password loaded from env var %s", cfg.Name, cfg.PasswordEnv)
+		}
+	}
+	if password == "" && cfg.PasswordFile != "" {
+		// Expand ~ in password file path
+		pwFile := cfg.PasswordFile
+		if strings.HasPrefix(pwFile, "~/") {
+			if home, err := os.UserHomeDir(); err == nil {
+				pwFile = filepath.Join(home, pwFile[2:])
+			}
+		}
+
+		// Check file permissions (must be 0600 or stricter)
+		if info, err := os.Stat(pwFile); err == nil {
+			mode := info.Mode().Perm()
+			if mode&0077 != 0 {
+				logger.Warn("SSH session %q: password file %s has insecure permissions %o (should be 0600)", cfg.Name, pwFile, mode)
+			} else {
+				// Read password from file
+				if data, err := os.ReadFile(pwFile); err == nil {
+					password = strings.TrimSpace(string(data))
+					logger.Debug("SSH session %q: password loaded from file %s", cfg.Name, pwFile)
+				} else {
+					logger.Warn("SSH session %q: failed to read password file %s: %v", cfg.Name, pwFile, err)
+				}
+			}
+		} else {
+			logger.Warn("SSH session %q: password file %s not found: %v", cfg.Name, pwFile, err)
+		}
+	}
+
+	session := &SSHSession{
 		name:            cfg.Name,
 		host:            cfg.Host,
 		port:            cfg.Port,
 		user:            cfg.User,
 		keyFile:         cfg.KeyFile,
+		password:        password,
 		jumpHost:        cfg.JumpHost,
 		agentForwarding: cfg.AgentForwarding,
 		env:             make(map[string]string),
@@ -78,6 +117,8 @@ func NewSSHSession(cfg SSHConfig) *SSHSession {
 		commandTimeout:  cfg.Timeout,
 		startupCommands: cfg.StartupCommands,
 	}
+
+	return session
 }
 
 // Name returns the session name

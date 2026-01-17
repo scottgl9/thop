@@ -235,7 +235,12 @@ func (a *App) runInteractiveSimple() error {
 // getPrompt returns the current prompt string
 func (a *App) getPrompt() string {
 	sessionName := a.sessions.GetActiveSessionName()
-	return session.FormatPrompt(sessionName)
+	activeSession := a.sessions.GetActiveSession()
+	cwd := ""
+	if activeSession != nil {
+		cwd = activeSession.GetCWD()
+	}
+	return session.FormatPrompt(sessionName, cwd)
 }
 
 // sessionCompleter returns a function that provides session name completions
@@ -440,7 +445,8 @@ func (a *App) cmdConnect(name string) error {
 
 	if sess.IsConnected() {
 		fmt.Printf("Session '%s' is already connected\n", name)
-		return nil
+		// Even if already connected, switch to it
+		return a.sessions.SetActiveSession(name)
 	}
 
 	fmt.Printf("Connecting to %s...\n", name)
@@ -449,6 +455,13 @@ func (a *App) cmdConnect(name string) error {
 	}
 
 	fmt.Printf("Connected to %s\n", name)
+
+	// Auto-switch to the newly connected session
+	if err := a.sessions.SetActiveSession(name); err != nil {
+		return err
+	}
+	fmt.Printf("Switched to %s\n", name)
+
 	return nil
 }
 

@@ -66,11 +66,23 @@ func NewManager(cfg *config.Config, stateMgr *state.Manager) *Manager {
 
 	logger.Debug("session manager initialized with %d sessions, timeout=%v", len(m.sessions), timeout)
 
-	// Load active session from state
+	// Load state (active session and cwd for each session)
 	if stateMgr != nil {
+		// Restore active session
 		active := stateMgr.GetActiveSession()
 		if _, ok := m.sessions[active]; ok {
 			m.activeSession = active
+		}
+
+		// Restore cwd for each session from state
+		for name, sess := range m.sessions {
+			if sessionState, ok := stateMgr.GetSessionState(name); ok && sessionState.CWD != "" {
+				if err := sess.SetCWD(sessionState.CWD); err != nil {
+					logger.Debug("failed to restore cwd for session %q: %v", name, err)
+				} else {
+					logger.Debug("restored cwd for session %q: %s", name, sessionState.CWD)
+				}
+			}
 		}
 	}
 
@@ -144,6 +156,8 @@ func (m *Manager) createSession(name string, cfg config.Session) Session {
 			Port:            port,
 			User:            user,
 			KeyFile:         keyFile,
+			PasswordEnv:     cfg.PasswordEnv,
+			PasswordFile:    cfg.PasswordFile,
 			JumpHost:        jumpHost,
 			AgentForwarding: agentForwarding,
 			Timeout:         m.commandTimeout,

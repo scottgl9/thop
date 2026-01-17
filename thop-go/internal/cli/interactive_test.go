@@ -380,13 +380,389 @@ func TestCmdCloseNotConnected(t *testing.T) {
 }
 
 func TestFormatPrompt(t *testing.T) {
-	prompt := session.FormatPrompt("local")
+	prompt := session.FormatPrompt("local", "")
 	if prompt != "(local) $ " {
 		t.Errorf("expected '(local) $ ', got '%s'", prompt)
 	}
 
-	prompt = session.FormatPrompt("prod")
+	prompt = session.FormatPrompt("prod", "")
 	if prompt != "(prod) $ " {
 		t.Errorf("expected '(prod) $ ', got '%s'", prompt)
+	}
+
+	// Test with cwd
+	prompt = session.FormatPrompt("local", "/var/log")
+	if prompt != "(local) /var/log $ " {
+		t.Errorf("expected '(local) /var/log $ ', got '%s'", prompt)
+	}
+}
+
+// Tests for new slash commands
+
+func TestHandleSlashCommandAuth(t *testing.T) {
+	app := createInteractiveTestApp(t)
+
+	// Auth without argument
+	err := app.handleSlashCommand("/auth")
+	if err == nil {
+		t.Error("expected error for /auth without argument")
+	}
+
+	// Auth on non-existent session
+	err = app.handleSlashCommand("/auth nonexistent")
+	if err == nil {
+		t.Error("expected error for nonexistent session")
+	}
+
+	sessionErr, ok := err.(*session.Error)
+	if !ok {
+		t.Errorf("expected *session.Error, got %T", err)
+	}
+	if sessionErr.Code != session.ErrSessionNotFound {
+		t.Errorf("expected code %s, got %s", session.ErrSessionNotFound, sessionErr.Code)
+	}
+
+	// Auth on local session (should fail - not SSH)
+	err = app.handleSlashCommand("/auth local")
+	if err == nil {
+		t.Error("expected error for /auth on local session")
+	}
+	if !strings.Contains(err.Error(), "not an SSH session") {
+		t.Errorf("expected 'not an SSH session' error, got: %v", err)
+	}
+}
+
+func TestHandleSlashCommandTrust(t *testing.T) {
+	app := createInteractiveTestApp(t)
+
+	// Trust without argument
+	err := app.handleSlashCommand("/trust")
+	if err == nil {
+		t.Error("expected error for /trust without argument")
+	}
+
+	// Trust on non-existent session
+	err = app.handleSlashCommand("/trust nonexistent")
+	if err == nil {
+		t.Error("expected error for nonexistent session")
+	}
+
+	sessionErr, ok := err.(*session.Error)
+	if !ok {
+		t.Errorf("expected *session.Error, got %T", err)
+	}
+	if sessionErr.Code != session.ErrSessionNotFound {
+		t.Errorf("expected code %s, got %s", session.ErrSessionNotFound, sessionErr.Code)
+	}
+
+	// Trust on local session (should fail - not SSH)
+	err = app.handleSlashCommand("/trust local")
+	if err == nil {
+		t.Error("expected error for /trust on local session")
+	}
+	if !strings.Contains(err.Error(), "not an SSH session") {
+		t.Errorf("expected 'not an SSH session' error, got: %v", err)
+	}
+}
+
+func TestHandleSlashCommandCopy(t *testing.T) {
+	app := createInteractiveTestApp(t)
+
+	// Copy without arguments
+	err := app.handleSlashCommand("/copy")
+	if err == nil {
+		t.Error("expected error for /copy without arguments")
+	}
+
+	// Copy with only one argument
+	err = app.handleSlashCommand("/copy source")
+	if err == nil {
+		t.Error("expected error for /copy with only one argument")
+	}
+
+	// Copy with /cp alias
+	err = app.handleSlashCommand("/cp")
+	if err == nil {
+		t.Error("expected error for /cp without arguments")
+	}
+
+	// Copy local to local (should fail)
+	err = app.handleSlashCommand("/copy local:/tmp/test local:/tmp/test2")
+	if err == nil {
+		t.Error("expected error for local-to-local copy")
+	}
+	if !strings.Contains(err.Error(), "both source and destination are local") {
+		t.Errorf("expected 'both source and destination are local' error, got: %v", err)
+	}
+
+	// Copy with non-existent source session
+	err = app.handleSlashCommand("/copy nonexistent:/path local:/path")
+	if err == nil {
+		t.Error("expected error for non-existent source session")
+	}
+
+	// Copy with non-existent destination session
+	err = app.handleSlashCommand("/copy local:/path nonexistent:/path")
+	if err == nil {
+		t.Error("expected error for non-existent destination session")
+	}
+}
+
+func TestHandleSlashCommandAddSession(t *testing.T) {
+	app := createInteractiveTestApp(t)
+
+	// Suppress stdout
+	oldStdout := os.Stdout
+	_, w, _ := os.Pipe()
+	os.Stdout = w
+
+	// Add without arguments
+	err := app.handleSlashCommand("/add-session")
+	if err == nil {
+		t.Error("expected error for /add-session without arguments")
+	}
+
+	// Add with only one argument
+	err = app.handleSlashCommand("/add-session newsession")
+	if err == nil {
+		t.Error("expected error for /add-session with only one argument")
+	}
+
+	// Add with /add alias
+	err = app.handleSlashCommand("/add")
+	if err == nil {
+		t.Error("expected error for /add without arguments")
+	}
+
+	// Try to add session with existing name
+	err = app.handleSlashCommand("/add-session local user@host.com")
+	if err == nil {
+		t.Error("expected error for adding session with existing name")
+	}
+	if !strings.Contains(err.Error(), "already exists") {
+		t.Errorf("expected 'already exists' error, got: %v", err)
+	}
+
+	w.Close()
+	os.Stdout = oldStdout
+}
+
+func TestHandleSlashCommandRead(t *testing.T) {
+	app := createInteractiveTestApp(t)
+
+	// Read without argument
+	err := app.handleSlashCommand("/read")
+	if err == nil {
+		t.Error("expected error for /read without argument")
+	}
+
+	// Read non-existent file on local session
+	err = app.handleSlashCommand("/read /nonexistent/file/path")
+	if err == nil {
+		t.Error("expected error for reading non-existent file")
+	}
+
+	// Create a test file and read it
+	tmpDir := t.TempDir()
+	testFile := tmpDir + "/testfile.txt"
+	testContent := "Hello, World!"
+	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+
+	// Capture stdout
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err = app.handleSlashCommand("/read " + testFile)
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	if err != nil {
+		t.Errorf("/read should not error for existing file: %v", err)
+	}
+
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	output := buf.String()
+
+	if output != testContent {
+		t.Errorf("expected '%s', got '%s'", testContent, output)
+	}
+
+	// Test /cat alias
+	oldStdout = os.Stdout
+	r, w, _ = os.Pipe()
+	os.Stdout = w
+
+	err = app.handleSlashCommand("/cat " + testFile)
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	if err != nil {
+		t.Errorf("/cat alias should work: %v", err)
+	}
+
+	buf.Reset()
+	io.Copy(&buf, r)
+	output = buf.String()
+
+	if output != testContent {
+		t.Errorf("/cat expected '%s', got '%s'", testContent, output)
+	}
+}
+
+func TestHandleSlashCommandWrite(t *testing.T) {
+	app := createInteractiveTestApp(t)
+
+	// Write without argument
+	err := app.handleSlashCommand("/write")
+	if err == nil {
+		t.Error("expected error for /write without argument")
+	}
+
+	// Write without content
+	err = app.handleSlashCommand("/write /tmp/test")
+	if err == nil {
+		t.Error("expected error for /write without content")
+	}
+
+	// Write to a file
+	tmpDir := t.TempDir()
+	testFile := tmpDir + "/output.txt"
+	testContent := "Test content"
+
+	// Suppress stdout
+	oldStdout := os.Stdout
+	_, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err = app.handleSlashCommand("/write " + testFile + " " + testContent)
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	if err != nil {
+		t.Errorf("/write should not error: %v", err)
+	}
+
+	// Verify file was written
+	data, err := os.ReadFile(testFile)
+	if err != nil {
+		t.Fatalf("failed to read written file: %v", err)
+	}
+
+	if string(data) != testContent {
+		t.Errorf("expected '%s', got '%s'", testContent, string(data))
+	}
+}
+
+func TestHandleSlashCommandEnv(t *testing.T) {
+	app := createInteractiveTestApp(t)
+
+	// Suppress stdout
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	// Show env (no args)
+	err := app.handleSlashCommand("/env")
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	if err != nil {
+		t.Errorf("/env should not error: %v", err)
+	}
+
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	output := buf.String()
+
+	if !strings.Contains(output, "No environment") {
+		t.Errorf("expected 'No environment' message, got: %s", output)
+	}
+
+	// Set env
+	oldStdout = os.Stdout
+	r, w, _ = os.Pipe()
+	os.Stdout = w
+
+	err = app.handleSlashCommand("/env TEST_VAR=test_value")
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	if err != nil {
+		t.Errorf("/env KEY=VALUE should not error: %v", err)
+	}
+
+	// Invalid env format
+	err = app.handleSlashCommand("/env INVALID")
+	if err == nil {
+		t.Error("expected error for invalid env format")
+	}
+}
+
+func TestParseFileSpec(t *testing.T) {
+	tests := []struct {
+		input           string
+		expectedSession string
+		expectedPath    string
+	}{
+		{"local:/path/to/file", "local", "/path/to/file"},
+		{"remote:/home/user/file", "remote", "/home/user/file"},
+		{"server1:/etc/config", "server1", "/etc/config"},
+		{"/absolute/path", "", "/absolute/path"},
+		{"relative/path", "", "relative/path"},
+		{"C:/Windows/path", "", "C:/Windows/path"}, // Windows path
+		{"D:\\Windows\\path", "", "D:\\Windows\\path"}, // Windows path with backslash
+	}
+
+	for _, tt := range tests {
+		sess, path := parseFileSpec(tt.input)
+		if sess != tt.expectedSession {
+			t.Errorf("parseFileSpec(%q) session = %q, want %q", tt.input, sess, tt.expectedSession)
+		}
+		if path != tt.expectedPath {
+			t.Errorf("parseFileSpec(%q) path = %q, want %q", tt.input, path, tt.expectedPath)
+		}
+	}
+}
+
+func TestParseHostSpec(t *testing.T) {
+	// Save and restore USER env
+	oldUser := os.Getenv("USER")
+	os.Setenv("USER", "testuser")
+	defer os.Setenv("USER", oldUser)
+
+	tests := []struct {
+		input        string
+		expectedUser string
+		expectedHost string
+		expectedPort int
+	}{
+		{"example.com", "testuser", "example.com", 22},
+		{"user@example.com", "user", "example.com", 22},
+		{"example.com:2222", "testuser", "example.com", 2222},
+		{"user@example.com:2222", "user", "example.com", 2222},
+		{"deploy@prod.server.com:22", "deploy", "prod.server.com", 22},
+		{"admin@192.168.1.1:22222", "admin", "192.168.1.1", 22222},
+	}
+
+	for _, tt := range tests {
+		user, host, port := parseHostSpec(tt.input)
+		if user != tt.expectedUser {
+			t.Errorf("parseHostSpec(%q) user = %q, want %q", tt.input, user, tt.expectedUser)
+		}
+		if host != tt.expectedHost {
+			t.Errorf("parseHostSpec(%q) host = %q, want %q", tt.input, host, tt.expectedHost)
+		}
+		if port != tt.expectedPort {
+			t.Errorf("parseHostSpec(%q) port = %d, want %d", tt.input, port, tt.expectedPort)
+		}
 	}
 }
