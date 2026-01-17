@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  sshd:
+    build:
+      context: .
+      dockerfile: Dockerfile.sshd
+    container_name: thop-test-sshd
+    ports:
+      - "2222:22"
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "22"]
+      interval: 5s
+      timeout: 3s
+      retries: 3

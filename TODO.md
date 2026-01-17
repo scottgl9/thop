@@ -188,7 +188,7 @@ After language selection, implement full MVP in chosen language.
 
 ### Integration Tests
 - [x] Local shell execution tests
-- [ ] SSH connection tests (Docker)
+- [x] SSH connection tests (Docker)
 - [x] Context switching tests
 - [x] State file tests
 
@@ -198,9 +198,9 @@ After language selection, implement full MVP in chosen language.
 - [ ] Proxy mode with Claude Code
 
 ### Test Infrastructure
-- [ ] Docker containers for SSH test targets
-- [ ] CI pipeline configuration
-- [ ] Test coverage reporting
+- [x] Docker containers for SSH test targets
+- [x] CI pipeline configuration (GitHub Actions)
+- [x] Test coverage reporting (Codecov integration)
 
 ---
 

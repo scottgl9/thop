@@ -1,0 +1,26 @@
+# SSH test server for thop integration tests
+FROM alpine:3.19
+
+RUN apk add --no-cache openssh-server bash
+
+# Create test user with known password
+RUN adduser -D -s /bin/bash testuser && \
+    echo "testuser:testpass123" | chpasswd
+
+# Generate host keys
+RUN ssh-keygen -A
+
+# Configure SSH
+RUN echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config && \
+    echo "PermitRootLogin no" >> /etc/ssh/sshd_config && \
+    echo "AllowUsers testuser" >> /etc/ssh/sshd_config
+
+# Create .ssh directory for testuser
+RUN mkdir -p /home/testuser/.ssh && \
+    chown testuser:testuser /home/testuser/.ssh && \
+    chmod 700 /home/testuser/.ssh
+
+EXPOSE 22
+
+# Start SSH daemon
+CMD ["/usr/sbin/sshd", "-D", "-e"]

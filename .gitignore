@@ -21,3 +21,7 @@ Thumbs.db
 *.deb
 *.buildinfo
 *.changes
+
+# Build outputs
+thop-go/thop
+thop-rust/target/
