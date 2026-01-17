@@ -316,7 +316,21 @@ With agent forwarding enabled, you can use git over SSH, SSH to other servers, o
 | 2 | Authentication failed |
 | 3 | Host key verification failed |
 
-## Integration with Claude Code
+## Integration with AI Agents
+
+### For Claude Code Users
+
+**Important**: Copy the agent documentation to your project directory:
+
+```bash
+# Copy Claude-specific guide to your project
+cp /path/to/thop/docs/THOP_FOR_CLAUDE.md ~/myproject/
+
+# Or for other AI agents
+cp /path/to/thop/docs/THOP_FOR_AGENTS.md ~/myproject/
+```
+
+This gives Claude complete instructions on how to use thop when working in that project.
 
 To use thop as the shell for Claude Code:
 
@@ -350,6 +364,17 @@ cat /var/log/app.log
 # 4. Switch back to local
 /local
 ```
+
+### Documentation for AI Agents
+
+See the `docs/` directory for comprehensive guides:
+
+- **[docs/THOP_FOR_CLAUDE.md](docs/THOP_FOR_CLAUDE.md)** - Complete guide for Claude Code with workflows and examples
+- **[docs/THOP_FOR_AGENTS.md](docs/THOP_FOR_AGENTS.md)** - Platform-agnostic guide for any AI agent
+- **[docs/MCP.md](docs/MCP.md)** - MCP server integration guide
+- **[docs/AGENT_README.md](docs/AGENT_README.md)** - How to use the agent documentation
+
+**Copy these files to your project directories** so Claude has access to the instructions when working on those projects.
 
 ## State Persistence
 

@@ -172,9 +172,27 @@ After language selection, implement full MVP in chosen language.
 - [x] Async command execution (/bg command)
 - [x] Background command with status polling (/jobs, /fg, /kill commands)
 
+### MCP Server ✅
+- [x] Built-in MCP server mode (--mcp flag)
+- [x] JSON-RPC 2.0 protocol implementation
+- [x] Session management tools (connect, switch, close, status)
+- [x] Command execution tool (execute with timeout/background support)
+- [x] Resources (session, config, state)
+- [x] Comprehensive test coverage (77.1%)
+- [ ] **See docs/MCP_IMPROVEMENTS.md for future enhancements:**
+  - [ ] SSH config auto-discovery (~/.ssh/config, known_hosts)
+  - [ ] Command timeout handling
+  - [ ] Structured error codes
+  - [ ] File transfer tools (SCP upload/download)
+  - [ ] Read-only file operation tools
+  - [ ] Connection health checks and auto-reconnect
+  - [ ] Rate limiting and circuit breakers
+  - [ ] Background job management (full implementation)
+  - [ ] Batch command support
+  - [ ] Sudo/privilege elevation
+
 ### Future
-- [ ] MCP server wrapper
-- [ ] Metrics and observability
+- [ ] Metrics and observability (see MCP_IMPROVEMENTS.md for details)
 
 ---
 
