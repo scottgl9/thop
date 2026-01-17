@@ -3,6 +3,7 @@ package session
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/creack/pty"
 	"github.com/scottgl9/thop/internal/logger"
+	"golang.org/x/sys/unix"
 	"golang.org/x/term"
 )
 
@@ -276,13 +278,72 @@ func (s *LocalSession) ExecuteInteractive(cmdStr string) (int, error) {
 		}
 	}()
 
-	// Copy stdin to PTY
+	// Create interrupt pipe to signal stdin goroutine to exit
+	interruptR, interruptW, pipeErr := os.Pipe()
+	if pipeErr != nil {
+		return 1, fmt.Errorf("failed to create interrupt pipe: %w", pipeErr)
+	}
+
+	stdinFd := int(os.Stdin.Fd())
+	interruptFd := int(interruptR.Fd())
+
+	// Copy stdin to PTY using poll() for interruptibility
+	stdinDone := make(chan struct{})
 	go func() {
-		io.Copy(ptmx, os.Stdin)
+		defer close(stdinDone)
+		buf := make([]byte, 32*1024)
+
+		pollFds := []unix.PollFd{
+			{Fd: int32(stdinFd), Events: unix.POLLIN},
+			{Fd: int32(interruptFd), Events: unix.POLLIN},
+		}
+
+		for {
+			// Wait for input on stdin or interrupt pipe
+			n, err := unix.Poll(pollFds, -1)
+			if err != nil {
+				if err == syscall.EINTR {
+					continue // Interrupted by signal, retry
+				}
+				return
+			}
+			if n <= 0 {
+				continue
+			}
+
+			// Check if interrupt pipe has data (time to exit)
+			if pollFds[1].Revents&unix.POLLIN != 0 {
+				return
+			}
+
+			// Check if stdin has data
+			if pollFds[0].Revents&unix.POLLIN != 0 {
+				nr, err := os.Stdin.Read(buf)
+				if err != nil || nr == 0 {
+					return
+				}
+				if _, err := ptmx.Write(buf[:nr]); err != nil {
+					return
+				}
+			}
+
+			// Check for hangup/error on stdin
+			if pollFds[0].Revents&(unix.POLLHUP|unix.POLLERR) != 0 {
+				return
+			}
+		}
 	}()
 
 	// Copy PTY to stdout
 	io.Copy(os.Stdout, ptmx)
+
+	// Signal stdin goroutine to exit
+	interruptW.Write([]byte{0})
+	interruptW.Close()
+	interruptR.Close()
+
+	// Wait for stdin goroutine to finish
+	<-stdinDone
 
 	// Wait for command to complete
 	err = cmd.Wait()

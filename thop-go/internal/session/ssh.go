@@ -18,6 +18,7 @@ import (
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
 	"golang.org/x/crypto/ssh/knownhosts"
+	"golang.org/x/sys/unix"
 	"golang.org/x/term"
 )
 
@@ -613,14 +614,73 @@ func (s *SSHSession) ExecuteInteractive(cmdStr string) (int, error) {
 		return 1, fmt.Errorf("failed to start command: %w", err)
 	}
 
-	// Copy stdin to remote in a goroutine
+	// Create interrupt pipe to signal stdin goroutine to exit
+	interruptR, interruptW, pipeErr := os.Pipe()
+	if pipeErr != nil {
+		return 1, fmt.Errorf("failed to create interrupt pipe: %w", pipeErr)
+	}
+
+	stdinFd := int(os.Stdin.Fd())
+	interruptFd := int(interruptR.Fd())
+
+	// Copy stdin to remote using poll() for interruptibility
+	stdinDone := make(chan struct{})
 	go func() {
-		io.Copy(stdinPipe, os.Stdin)
-		stdinPipe.Close()
+		defer close(stdinDone)
+		defer stdinPipe.Close()
+		buf := make([]byte, 32*1024)
+
+		pollFds := []unix.PollFd{
+			{Fd: int32(stdinFd), Events: unix.POLLIN},
+			{Fd: int32(interruptFd), Events: unix.POLLIN},
+		}
+
+		for {
+			// Wait for input on stdin or interrupt pipe
+			n, err := unix.Poll(pollFds, -1)
+			if err != nil {
+				if err == syscall.EINTR {
+					continue // Interrupted by signal, retry
+				}
+				return
+			}
+			if n <= 0 {
+				continue
+			}
+
+			// Check if interrupt pipe has data (time to exit)
+			if pollFds[1].Revents&unix.POLLIN != 0 {
+				return
+			}
+
+			// Check if stdin has data
+			if pollFds[0].Revents&unix.POLLIN != 0 {
+				nr, err := os.Stdin.Read(buf)
+				if err != nil || nr == 0 {
+					return
+				}
+				if _, err := stdinPipe.Write(buf[:nr]); err != nil {
+					return
+				}
+			}
+
+			// Check for hangup/error on stdin
+			if pollFds[0].Revents&(unix.POLLHUP|unix.POLLERR) != 0 {
+				return
+			}
+		}
 	}()
 
 	// Copy remote stdout to local stdout
 	io.Copy(os.Stdout, stdoutPipe)
+
+	// Signal stdin goroutine to exit
+	interruptW.Write([]byte{0})
+	interruptW.Close()
+	interruptR.Close()
+
+	// Wait for stdin goroutine to finish
+	<-stdinDone
 
 	// Wait for command to complete
 	err = session.Wait()
