@@ -263,11 +263,22 @@ mod tests {
         // cd to /tmp
         let result = session.execute("cd /tmp").unwrap();
         assert_eq!(result.exit_code, 0);
-        assert_eq!(session.get_cwd(), "/tmp");
+        // On macOS, /tmp is a symlink to /private/tmp, so accept either
+        let cwd = session.get_cwd();
+        assert!(
+            cwd == "/tmp" || cwd == "/private/tmp",
+            "expected '/tmp' or '/private/tmp', got '{}'",
+            cwd
+        );
 
-        // pwd should return /tmp
+        // pwd should return /tmp (or /private/tmp on macOS)
         let result = session.execute("pwd").unwrap();
-        assert_eq!(result.stdout.trim(), "/tmp");
+        let pwd_output = result.stdout.trim();
+        assert!(
+            pwd_output == "/tmp" || pwd_output == "/private/tmp",
+            "expected '/tmp' or '/private/tmp', got '{}'",
+            pwd_output
+        );
 
         // cd with no args goes to home
         session.execute("cd").unwrap();
@@ -306,7 +317,13 @@ mod tests {
         let mut session = LocalSession::new("test", None);
 
         session.set_cwd("/tmp").unwrap();
-        assert_eq!(session.get_cwd(), "/tmp");
+        // On macOS, /tmp is a symlink to /private/tmp, so accept either
+        let cwd = session.get_cwd();
+        assert!(
+            cwd == "/tmp" || cwd == "/private/tmp",
+            "expected '/tmp' or '/private/tmp', got '{}'",
+            cwd
+        );
 
         let err = session.set_cwd("/nonexistent_12345");
         assert!(err.is_err());
