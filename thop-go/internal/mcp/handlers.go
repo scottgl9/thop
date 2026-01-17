@@ -108,10 +108,10 @@ func (s *Server) handleToolsList(ctx context.Context, params json.RawMessage) (i
 			},
 		},
 
-		// Command execution tools
+		// Command execution tool
 		{
 			Name:        "execute",
-			Description: "Execute a command in the active session",
+			Description: "Execute a command in the active session (optionally in background)",
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]Property{
@@ -125,26 +125,13 @@ func (s *Server) handleToolsList(ctx context.Context, params json.RawMessage) (i
 					},
 					"timeout": {
 						Type:        "integer",
-						Description: "Optional: command timeout in seconds",
+						Description: "Optional: command timeout in seconds (ignored if background is true)",
 						Default:     300,
 					},
-				},
-				Required: []string{"command"},
-			},
-		},
-		{
-			Name:        "executeBackground",
-			Description: "Execute a command in the background",
-			InputSchema: InputSchema{
-				Type: "object",
-				Properties: map[string]Property{
-					"command": {
-						Type:        "string",
-						Description: "Command to execute in background",
-					},
-					"session": {
-						Type:        "string",
-						Description: "Optional: specific session to execute in",
+					"background": {
+						Type:        "boolean",
+						Description: "Optional: run command in background (default: false)",
+						Default:     false,
 					},
 				},
 				Required: []string{"command"},
@@ -186,8 +173,6 @@ func (s *Server) handleToolCall(ctx context.Context, params json.RawMessage) (in
 	// Command execution
 	case "execute":
 		return s.toolExecute(ctx, callParams.Arguments)
-	case "executeBackground":
-		return s.toolExecuteBackground(ctx, callParams.Arguments)
 
 	default:
 		return nil, &JSONRPCError{

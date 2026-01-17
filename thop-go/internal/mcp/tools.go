@@ -112,9 +112,14 @@ func (s *Server) toolExecute(ctx context.Context, args map[string]interface{}) (
 
 	sessionName, _ := args["session"].(string)
 	timeout := 300 // default 5 minutes
+	background := false
 
 	if t, ok := args["timeout"].(float64); ok {
 		timeout = int(t)
+	}
+
+	if bg, ok := args["background"].(bool); ok {
+		background = bg
 	}
 
 	// Get the session
@@ -130,6 +135,13 @@ func (s *Server) toolExecute(ctx context.Context, args map[string]interface{}) (
 		if sess == nil {
 			return s.errorResult("No active session"), nil
 		}
+	}
+
+	// Handle background execution
+	if background {
+		// TODO: Implement background job execution
+		// This requires extending the Session interface with background job support
+		return s.errorResult("Background execution not yet implemented"), nil
 	}
 
 	// Execute the command with timeout
@@ -185,13 +197,6 @@ func (s *Server) toolExecute(ctx context.Context, args map[string]interface{}) (
 		Content: content,
 		IsError: result.ExitCode != 0,
 	}, nil
-}
-
-// toolExecuteBackground handles the executeBackground tool
-func (s *Server) toolExecuteBackground(ctx context.Context, args map[string]interface{}) (interface{}, error) {
-	// TODO: Implement background job execution
-	// This requires extending the Session interface with background job support
-	return s.errorResult("Background execution not yet implemented"), nil
 }
 
 // Helper functions
