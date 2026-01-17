@@ -478,3 +478,251 @@ func TestMCPServer_JSONRPCParsing(t *testing.T) {
 		})
 	}
 }
+// Test helper function
+func createTestServer() *Server {
+	cfg := &config.Config{
+		Settings: config.Settings{DefaultSession: "local"},
+		Sessions: map[string]config.Session{
+			"local": {Type: "local", Shell: "/bin/bash"},
+		},
+	}
+	return NewServer(cfg, session.NewManager(cfg, state.NewManager("/tmp/test-mcp.json")), state.NewManager("/tmp/test-mcp.json"))
+}
+
+func TestMCPServer_ToolCall_Execute(t *testing.T) {
+	srv := createTestServer()
+	tests := []struct {
+		name string
+		params string
+		wantErr bool
+	}{
+		{"valid", `{"name":"execute","arguments":{"command":"echo test"}}`, false},
+		{"background", `{"name":"execute","arguments":{"command":"sleep 1","background":true}}`, true},
+		{"no command", `{"name":"execute","arguments":{}}`, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res, _ := srv.handleToolCall(context.Background(), json.RawMessage(tt.params))
+			if tr, ok := res.(ToolCallResult); ok && tr.IsError != tt.wantErr {
+				t.Errorf("wantErr=%v, got IsError=%v", tt.wantErr, tr.IsError)
+			}
+		})
+	}
+}
+
+func TestMCPServer_ResourceRead(t *testing.T) {
+	srv := createTestServer()
+	tests := []struct{ uri string; wantErr bool }{
+		{"session://active", false},
+		{"session://all", false},
+		{"config://thop", false},
+		{"state://thop", false},
+		{"unknown://x", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.uri, func(t *testing.T) {
+			_, err := srv.handleResourceRead(context.Background(), json.RawMessage(`{"uri":"`+tt.uri+`"}`))
+			if (err != nil) != tt.wantErr {
+				t.Errorf("wantErr=%v, got err=%v", tt.wantErr, err)
+			}
+		})
+	}
+}
+
+func TestMCPServer_PromptGet(t *testing.T) {
+	srv := createTestServer()
+	tests := []struct{ name string; args string; wantErr bool }{
+		{"deploy", `{"server":"s","branch":"main"}`, false},
+		{"debug", `{"server":"s","service":"api"}`, false},
+		{"backup", `{"server":"s","path":"/data"}`, false},
+		{"unknown", `{}`, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := srv.handlePromptGet(context.Background(), json.RawMessage(`{"name":"`+tt.name+`","arguments":`+tt.args+`}`))
+			if (err != nil) != tt.wantErr {
+				t.Errorf("wantErr=%v, got err=%v", tt.wantErr, err)
+			}
+		})
+	}
+}
+
+func TestMCPServer_Notifications(t *testing.T) {
+	srv := createTestServer()
+	if _, err := srv.handleInitialized(context.Background(), nil); err != nil {
+		t.Error(err)
+	}
+	if _, err := srv.handleCancelled(context.Background(), nil); err != nil {
+		t.Error(err)
+	}
+	if _, err := srv.handleProgress(context.Background(), json.RawMessage(`{"progressToken":"t","progress":1}`)); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestMCPServer_SendMethods(t *testing.T) {
+	srv := createTestServer()
+	buf := &bytes.Buffer{}
+	srv.SetIO(nil, buf)
+	
+	if err := srv.sendError(1, -32600, "test", "data"); err != nil {
+		t.Error(err)
+	}
+	buf.Reset()
+	
+	if err := srv.sendNotification("test", map[string]string{"k":"v"}); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestMCPServer_Errors(t *testing.T) {
+	srv := createTestServer()
+	buf := &bytes.Buffer{}
+	srv.SetIO(nil, buf)
+	
+	msg := &JSONRPCMessage{JSONRPC: "2.0", Method: "unknown", ID: 1}
+	if err := srv.handleRequest(msg); err != nil {
+		t.Error(err)
+	}
+	
+	var resp JSONRPCResponse
+	json.Unmarshal(buf.Bytes()[:buf.Len()-1], &resp)
+	if resp.Error == nil || resp.Error.Code != -32601 {
+		t.Error("Expected method not found error")
+	}
+}
+
+func TestMCPServer_Stop(t *testing.T) {
+	srv := createTestServer()
+	srv.Stop()
+	select {
+	case <-srv.ctx.Done():
+	default:
+		t.Error("Context should be cancelled")
+	}
+}
+
+func TestJSONRPCError_Error(t *testing.T) {
+	err := &JSONRPCError{Code: -1, Message: "test"}
+	if err.Error() != "test" {
+		t.Errorf("Expected 'test', got '%s'", err.Error())
+	}
+}
+
+func TestMCPServer_ToolCall_Connect(t *testing.T) {
+	srv := createTestServer()
+	tests := []struct {
+		name string
+		params string
+		wantErr bool
+	}{
+		{"missing session", `{"name":"connect","arguments":{}}`, true},
+		{"nonexistent session", `{"name":"connect","arguments":{"session":"invalid"}}`, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res, _ := srv.handleToolCall(context.Background(), json.RawMessage(tt.params))
+			if tr, ok := res.(ToolCallResult); ok && tr.IsError != tt.wantErr {
+				t.Errorf("wantErr=%v, got IsError=%v", tt.wantErr, tr.IsError)
+			}
+		})
+	}
+}
+
+func TestMCPServer_ToolCall_Switch(t *testing.T) {
+	srv := createTestServer()
+	tests := []struct {
+		name string
+		params string
+		wantErr bool
+	}{
+		{"missing session", `{"name":"switch","arguments":{}}`, true},
+		{"nonexistent session", `{"name":"switch","arguments":{"session":"invalid"}}`, true},
+		{"valid switch", `{"name":"switch","arguments":{"session":"local"}}`, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res, _ := srv.handleToolCall(context.Background(), json.RawMessage(tt.params))
+			if tr, ok := res.(ToolCallResult); ok && tr.IsError != tt.wantErr {
+				t.Errorf("wantErr=%v, got IsError=%v", tt.wantErr, tr.IsError)
+			}
+		})
+	}
+}
+
+func TestMCPServer_ToolCall_Close(t *testing.T) {
+	srv := createTestServer()
+	tests := []struct {
+		name string
+		params string
+		wantErr bool
+	}{
+		{"missing session", `{"name":"close","arguments":{}}`, true},
+		{"nonexistent session", `{"name":"close","arguments":{"session":"invalid"}}`, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res, _ := srv.handleToolCall(context.Background(), json.RawMessage(tt.params))
+			if tr, ok := res.(ToolCallResult); ok && tr.IsError != tt.wantErr {
+				t.Errorf("wantErr=%v, got IsError=%v", tt.wantErr, tr.IsError)
+			}
+		})
+	}
+}
+
+func TestMCPServer_HandleToolCall_InvalidParamsError(t *testing.T) {
+	srv := createTestServer()
+	_, err := srv.handleToolCall(context.Background(), json.RawMessage(`{invalid}`))
+	if err == nil {
+		t.Error("Expected error for invalid params")
+	}
+	if rpcErr, ok := err.(*JSONRPCError); !ok || rpcErr.Code != -32602 {
+		t.Error("Expected invalid params error")
+	}
+}
+
+func TestMCPServer_HandleToolCall_UnknownTool(t *testing.T) {
+	srv := createTestServer()
+	_, err := srv.handleToolCall(context.Background(), json.RawMessage(`{"name":"unknownTool","arguments":{}}`))
+	if err == nil {
+		t.Error("Expected error for unknown tool")
+	}
+	if rpcErr, ok := err.(*JSONRPCError); !ok || rpcErr.Code != -32601 {
+		t.Error("Expected method not found error")
+	}
+}
+
+func TestMCPServer_ResourceRead_InvalidParamsError(t *testing.T) {
+	srv := createTestServer()
+	_, err := srv.handleResourceRead(context.Background(), json.RawMessage(`{invalid}`))
+	if err == nil {
+		t.Error("Expected error for invalid params")
+	}
+}
+
+func TestMCPServer_PromptGet_InvalidParamsError(t *testing.T) {
+	srv := createTestServer()
+	_, err := srv.handlePromptGet(context.Background(), json.RawMessage(`{invalid}`))
+	if err == nil {
+		t.Error("Expected error for invalid params")
+	}
+}
+
+func TestMCPServer_HandleInitialize_InvalidParamsError(t *testing.T) {
+	srv := createTestServer()
+	_, err := srv.handleInitialize(context.Background(), json.RawMessage(`{invalid}`))
+	if err == nil {
+		t.Error("Expected error for invalid params")
+	}
+	if rpcErr, ok := err.(*JSONRPCError); !ok || rpcErr.Code != -32602 {
+		t.Error("Expected invalid params error")
+	}
+}
+
+func TestMCPServer_HandleProgress_InvalidParams(t *testing.T) {
+	srv := createTestServer()
+	// Should not error even with invalid params (logs and continues)
+	if _, err := srv.handleProgress(context.Background(), json.RawMessage(`{invalid}`)); err != nil {
+		t.Error(err)
+	}
+}
