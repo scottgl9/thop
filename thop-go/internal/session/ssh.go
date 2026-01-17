@@ -552,12 +552,18 @@ func (s *SSHSession) ExecuteInteractive(cmdStr string) (int, error) {
 		return 1, fmt.Errorf("failed to request PTY: %w", err)
 	}
 
-	// Connect stdin, stdout, stderr
-	session.Stdin = os.Stdin
-	session.Stdout = os.Stdout
-	session.Stderr = os.Stderr
+	// Get pipes for stdin/stdout
+	stdinPipe, err := session.StdinPipe()
+	if err != nil {
+		return 1, fmt.Errorf("failed to get stdin pipe: %w", err)
+	}
 
-	// Put terminal in raw mode
+	stdoutPipe, err := session.StdoutPipe()
+	if err != nil {
+		return 1, fmt.Errorf("failed to get stdout pipe: %w", err)
+	}
+
+	// Put terminal in raw mode before starting
 	var oldState *term.State
 	if term.IsTerminal(fd) {
 		oldState, err = term.MakeRaw(fd)
@@ -602,15 +608,30 @@ func (s *SSHSession) ExecuteInteractive(cmdStr string) (int, error) {
 	}
 	fullCmd = envPrefix.String() + fullCmd
 
-	// Run the command
-	err = session.Run(fullCmd)
+	// Start the command (non-blocking)
+	if err := session.Start(fullCmd); err != nil {
+		return 1, fmt.Errorf("failed to start command: %w", err)
+	}
+
+	// Copy stdin to remote in a goroutine
+	go func() {
+		io.Copy(stdinPipe, os.Stdin)
+		stdinPipe.Close()
+	}()
+
+	// Copy remote stdout to local stdout
+	io.Copy(os.Stdout, stdoutPipe)
+
+	// Wait for command to complete
+	err = session.Wait()
 
 	exitCode := 0
 	if err != nil {
 		if exitErr, ok := err.(*ssh.ExitError); ok {
 			exitCode = exitErr.ExitStatus()
 		} else {
-			return 1, err
+			// Some errors are expected when the session closes
+			logger.Debug("Session wait error: %v", err)
 		}
 	}
 
