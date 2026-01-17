@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::io::{Read, Write};
+use std::io::Read;
 use std::net::TcpStream;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -15,6 +15,7 @@ pub struct SshConfig {
     pub user: String,
     pub port: u16,
     pub identity_file: Option<String>,
+    pub password: Option<String>,
 }
 
 /// SSH session
@@ -24,17 +25,20 @@ pub struct SshSession {
     session: Option<Ssh2Session>,
     cwd: String,
     env: HashMap<String, String>,
+    password: Option<String>,
 }
 
 impl SshSession {
     /// Create a new SSH session
     pub fn new(name: impl Into<String>, config: SshConfig) -> Self {
+        let password = config.password.clone();
         Self {
             name: name.into(),
             config,
             session: None,
             cwd: "/".to_string(),
             env: HashMap::new(),
+            password,
         }
     }
 
@@ -51,6 +55,16 @@ impl SshSession {
     /// Get the port
     pub fn port(&self) -> u16 {
         self.config.port
+    }
+
+    /// Set the password for authentication
+    pub fn set_password(&mut self, password: &str) {
+        self.password = Some(password.to_string());
+    }
+
+    /// Check if password is set
+    pub fn has_password(&self) -> bool {
+        self.password.is_some()
     }
 
     /// Load known hosts and verify server key
@@ -103,7 +117,7 @@ impl SshSession {
         }
     }
 
-    /// Authenticate using SSH agent or key file
+    /// Authenticate using SSH agent, key file, or password
     fn authenticate(&self, session: &Ssh2Session) -> Result<()> {
         // Try SSH agent first
         if let Ok(mut agent) = session.agent() {
@@ -128,21 +142,14 @@ impl SshSession {
             };
 
             if identity_path.exists() {
-                session.userauth_pubkey_file(
+                if session.userauth_pubkey_file(
                     &self.config.user,
                     None,
                     &identity_path,
                     None,
-                ).map_err(|e| {
-                    SessionError::new(
-                        ErrorCode::AuthKeyRejected,
-                        format!("Key rejected: {}", e),
-                        &self.name,
-                    )
-                    .with_host(&self.config.host)
-                })?;
-
-                return Ok(());
+                ).is_ok() {
+                    return Ok(());
+                }
             }
         }
 
@@ -160,6 +167,19 @@ impl SshSession {
                     return Ok(());
                 }
             }
+        }
+
+        // Try password authentication if available
+        if let Some(ref password) = self.password {
+            session.userauth_password(&self.config.user, password).map_err(|e| {
+                SessionError::new(
+                    ErrorCode::AuthFailed,
+                    format!("Password authentication failed: {}", e),
+                    &self.name,
+                )
+                .with_host(&self.config.host)
+            })?;
+            return Ok(());
         }
 
         Err(SessionError::auth_failed(&self.name, &self.config.host).into())
@@ -327,6 +347,7 @@ mod tests {
             user: "testuser".to_string(),
             port: 22,
             identity_file: None,
+            password: None,
         };
 
         let session = SshSession::new("test", config);
@@ -336,6 +357,7 @@ mod tests {
         assert_eq!(session.host(), "example.com");
         assert_eq!(session.user(), "testuser");
         assert_eq!(session.port(), 22);
+        assert!(!session.has_password());
     }
 
     #[test]
@@ -345,6 +367,7 @@ mod tests {
             user: "testuser".to_string(),
             port: 22,
             identity_file: None,
+            password: None,
         };
 
         let mut session = SshSession::new("test", config);
@@ -361,10 +384,28 @@ mod tests {
             user: "testuser".to_string(),
             port: 22,
             identity_file: None,
+            password: None,
         };
 
         let mut session = SshSession::new("test", config);
         session.set_cwd("/tmp").unwrap();
         assert_eq!(session.get_cwd(), "/tmp");
+    }
+
+    #[test]
+    fn test_set_password() {
+        let config = SshConfig {
+            host: "example.com".to_string(),
+            user: "testuser".to_string(),
+            port: 22,
+            identity_file: None,
+            password: None,
+        };
+
+        let mut session = SshSession::new("test", config);
+        assert!(!session.has_password());
+
+        session.set_password("secret123");
+        assert!(session.has_password());
     }
 }

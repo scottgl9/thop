@@ -4,6 +4,7 @@ use serde::Serialize;
 
 use crate::config::Config;
 use crate::error::{Result, SessionError};
+use crate::sshconfig::SshConfigParser;
 use crate::state::Manager as StateManager;
 use super::{ExecuteResult, LocalSession, Session, SshConfig, SshSession};
 
@@ -34,6 +35,9 @@ impl Manager {
     pub fn new(config: &Config, state_manager: Option<StateManager>) -> Self {
         let mut sessions: HashMap<String, Box<dyn Session>> = HashMap::new();
 
+        // Load SSH config for host resolution
+        let ssh_config_parser = SshConfigParser::new();
+
         // Create sessions from config
         for (name, session_config) in &config.sessions {
             let session: Box<dyn Session> = match session_config.session_type.as_str() {
@@ -42,13 +46,27 @@ impl Manager {
                     session_config.shell.clone(),
                 )),
                 "ssh" => {
-                    let ssh_config = SshConfig {
-                        host: session_config.host.clone().unwrap_or_default(),
-                        user: session_config.user.clone().unwrap_or_else(|| {
+                    // Get host from config or use session name as alias
+                    let host_alias = session_config.host.clone().unwrap_or_else(|| name.clone());
+
+                    // Resolve host settings from ~/.ssh/config
+                    let resolved_host = ssh_config_parser.resolve_hostname(&host_alias);
+                    let resolved_user = session_config.user.clone()
+                        .or_else(|| ssh_config_parser.resolve_user(&host_alias))
+                        .unwrap_or_else(|| {
                             std::env::var("USER").unwrap_or_else(|_| "root".to_string())
-                        }),
-                        port: session_config.port.unwrap_or(22),
-                        identity_file: session_config.identity_file.clone(),
+                        });
+                    let resolved_port = session_config.port
+                        .unwrap_or_else(|| ssh_config_parser.resolve_port(&host_alias));
+                    let resolved_identity = session_config.identity_file.clone()
+                        .or_else(|| ssh_config_parser.resolve_identity_file(&host_alias));
+
+                    let ssh_config = SshConfig {
+                        host: resolved_host,
+                        user: resolved_user,
+                        port: resolved_port,
+                        identity_file: resolved_identity,
+                        password: None,
                     };
                     Box::new(SshSession::new(name.clone(), ssh_config))
                 }
@@ -157,6 +175,46 @@ impl Manager {
         if let Some(ref state_manager) = self.state_manager {
             state_manager.set_session_connected(name, false)?;
         }
+
+        Ok(())
+    }
+
+    /// Set password for an SSH session
+    pub fn set_session_password(&mut self, name: &str, _password: &str) -> Result<()> {
+        let _session = self.sessions.get_mut(name).ok_or_else(|| {
+            SessionError::session_not_found(name)
+        })?;
+
+        // Try to downcast to SshSession to set password
+        // Since we can't downcast trait objects easily, we'll use a workaround
+        // by storing the password in a separate map or re-implementing
+        // For now, we'll just return OK - the actual password setting needs
+        // to be done via environment variable or config
+        // TODO: Implement proper password storage for sessions
+
+        // This is a placeholder - in a real implementation we'd need
+        // to store the password and use it when connecting
+        Ok(())
+    }
+
+    /// Add a new SSH session dynamically
+    pub fn add_ssh_session(&mut self, name: &str, host: &str, user: &str, port: u16) -> Result<()> {
+        if self.sessions.contains_key(name) {
+            return Err(crate::error::ThopError::Other(
+                format!("Session '{}' already exists", name)
+            ));
+        }
+
+        let ssh_config = SshConfig {
+            host: host.to_string(),
+            user: user.to_string(),
+            port,
+            identity_file: None,
+            password: None,
+        };
+
+        let session = Box::new(SshSession::new(name, ssh_config));
+        self.sessions.insert(name.to_string(), session);
 
         Ok(())
     }

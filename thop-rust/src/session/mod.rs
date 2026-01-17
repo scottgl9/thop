@@ -6,7 +6,7 @@ pub use local::LocalSession;
 pub use ssh::{SshConfig, SshSession};
 pub use manager::{Manager, SessionInfo};
 
-use crate::error::{Result, SessionError};
+use crate::error::Result;
 use serde::Serialize;
 
 /// Result of command execution
