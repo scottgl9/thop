@@ -29,11 +29,12 @@ func TestSSHSessionConnect(t *testing.T) {
 	skipIfNoDocker(t)
 
 	session := NewSSHSession(SSHConfig{
-		Name:     "test",
-		Host:     testSSHHost,
-		Port:     testSSHPort,
-		User:     testSSHUser,
-		Password: testSSHPassword,
+		Name:                  "test",
+		Host:                  testSSHHost,
+		Port:                  testSSHPort,
+		User:                  testSSHUser,
+		Password:              testSSHPassword,
+		InsecureIgnoreHostKey: true, // Skip host key verification for testing
 	})
 
 	err := session.Connect()
@@ -51,11 +52,12 @@ func TestSSHSessionExecute(t *testing.T) {
 	skipIfNoDocker(t)
 
 	session := NewSSHSession(SSHConfig{
-		Name:     "test",
-		Host:     testSSHHost,
-		Port:     testSSHPort,
-		User:     testSSHUser,
-		Password: testSSHPassword,
+		Name:                  "test",
+		Host:                  testSSHHost,
+		Port:                  testSSHPort,
+		User:                  testSSHUser,
+		Password:              testSSHPassword,
+		InsecureIgnoreHostKey: true,
 	})
 
 	err := session.Connect()
@@ -82,11 +84,12 @@ func TestSSHSessionCD(t *testing.T) {
 	skipIfNoDocker(t)
 
 	session := NewSSHSession(SSHConfig{
-		Name:     "test",
-		Host:     testSSHHost,
-		Port:     testSSHPort,
-		User:     testSSHUser,
-		Password: testSSHPassword,
+		Name:                  "test",
+		Host:                  testSSHHost,
+		Port:                  testSSHPort,
+		User:                  testSSHUser,
+		Password:              testSSHPassword,
+		InsecureIgnoreHostKey: true,
 	})
 
 	err := session.Connect()
@@ -120,11 +123,12 @@ func TestSSHSessionEnv(t *testing.T) {
 	skipIfNoDocker(t)
 
 	session := NewSSHSession(SSHConfig{
-		Name:     "test",
-		Host:     testSSHHost,
-		Port:     testSSHPort,
-		User:     testSSHUser,
-		Password: testSSHPassword,
+		Name:                  "test",
+		Host:                  testSSHHost,
+		Port:                  testSSHPort,
+		User:                  testSSHUser,
+		Password:              testSSHPassword,
+		InsecureIgnoreHostKey: true,
 	})
 
 	err := session.Connect()
@@ -151,11 +155,12 @@ func TestSSHSessionDisconnect(t *testing.T) {
 	skipIfNoDocker(t)
 
 	session := NewSSHSession(SSHConfig{
-		Name:     "test",
-		Host:     testSSHHost,
-		Port:     testSSHPort,
-		User:     testSSHUser,
-		Password: testSSHPassword,
+		Name:                  "test",
+		Host:                  testSSHHost,
+		Port:                  testSSHPort,
+		User:                  testSSHUser,
+		Password:              testSSHPassword,
+		InsecureIgnoreHostKey: true,
 	})
 
 	err := session.Connect()
@@ -181,11 +186,12 @@ func TestSSHSessionReconnect(t *testing.T) {
 	skipIfNoDocker(t)
 
 	session := NewSSHSession(SSHConfig{
-		Name:     "test",
-		Host:     testSSHHost,
-		Port:     testSSHPort,
-		User:     testSSHUser,
-		Password: testSSHPassword,
+		Name:                  "test",
+		Host:                  testSSHHost,
+		Port:                  testSSHPort,
+		User:                  testSSHUser,
+		Password:              testSSHPassword,
+		InsecureIgnoreHostKey: true,
 	})
 
 	err := session.Connect()
@@ -226,12 +232,13 @@ func TestSSHSessionCommandTimeout(t *testing.T) {
 	skipIfNoDocker(t)
 
 	session := NewSSHSession(SSHConfig{
-		Name:     "test",
-		Host:     testSSHHost,
-		Port:     testSSHPort,
-		User:     testSSHUser,
-		Password: testSSHPassword,
-		Timeout:  1 * time.Second, // Very short timeout
+		Name:                  "test",
+		Host:                  testSSHHost,
+		Port:                  testSSHPort,
+		User:                  testSSHUser,
+		Password:              testSSHPassword,
+		InsecureIgnoreHostKey: true,
+		Timeout:               1 * time.Second, // Very short timeout
 	})
 
 	err := session.Connect()
@@ -258,11 +265,12 @@ func TestSSHSessionSFTP(t *testing.T) {
 	skipIfNoDocker(t)
 
 	session := NewSSHSession(SSHConfig{
-		Name:     "test",
-		Host:     testSSHHost,
-		Port:     testSSHPort,
-		User:     testSSHUser,
-		Password: testSSHPassword,
+		Name:                  "test",
+		Host:                  testSSHHost,
+		Port:                  testSSHPort,
+		User:                  testSSHUser,
+		Password:              testSSHPassword,
+		InsecureIgnoreHostKey: true,
 	})
 
 	err := session.Connect()

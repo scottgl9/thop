@@ -20,39 +20,41 @@ import (
 
 // SSHSession represents an SSH session to a remote host
 type SSHSession struct {
-	name            string
-	host            string
-	port            int
-	user            string
-	keyFile         string
-	password        string // Password for authentication (set via /auth command)
-	jumpHost        string // Jump host for ProxyJump (format: user@host:port or just host)
-	agentForwarding bool   // Whether to forward SSH agent to remote
-	client          *ssh.Client
-	jumpClient      *ssh.Client // Jump host client (if using jump host)
-	cwd             string
-	env             map[string]string
-	connected       bool
-	connectTimeout  time.Duration
-	commandTimeout  time.Duration
-	startupCommands []string
+	name                 string
+	host                 string
+	port                 int
+	user                 string
+	keyFile              string
+	password             string // Password for authentication (set via /auth command)
+	jumpHost             string // Jump host for ProxyJump (format: user@host:port or just host)
+	agentForwarding      bool   // Whether to forward SSH agent to remote
+	insecureIgnoreHostKey bool  // Skip host key verification (for testing only)
+	client               *ssh.Client
+	jumpClient           *ssh.Client // Jump host client (if using jump host)
+	cwd                  string
+	env                  map[string]string
+	connected            bool
+	connectTimeout       time.Duration
+	commandTimeout       time.Duration
+	startupCommands      []string
 }
 
 // SSHConfig contains SSH session configuration
 type SSHConfig struct {
-	Name            string
-	Host            string
-	Port            int
-	User            string
-	KeyFile         string
-	Password        string        // Optional, for auth command
-	PasswordEnv     string        // Environment variable containing password
-	PasswordFile    string        // File containing password (must be 0600)
-	JumpHost        string        // Jump host for ProxyJump (format: user@host:port or just host)
-	AgentForwarding bool          // Whether to forward SSH agent to remote
-	ConnectTimeout  time.Duration // Connection timeout (default 30s)
-	Timeout         time.Duration // Command timeout (default 300s)
-	StartupCommands []string      // Commands to run after connecting
+	Name                  string
+	Host                  string
+	Port                  int
+	User                  string
+	KeyFile               string
+	Password              string        // Optional, for auth command
+	PasswordEnv           string        // Environment variable containing password
+	PasswordFile          string        // File containing password (must be 0600)
+	JumpHost              string        // Jump host for ProxyJump (format: user@host:port or just host)
+	AgentForwarding       bool          // Whether to forward SSH agent to remote
+	InsecureIgnoreHostKey bool          // Skip host key verification (for testing only)
+	ConnectTimeout        time.Duration // Connection timeout (default 30s)
+	Timeout               time.Duration // Command timeout (default 300s)
+	StartupCommands       []string      // Commands to run after connecting
 }
 
 // NewSSHSession creates a new SSH session
@@ -104,18 +106,19 @@ func NewSSHSession(cfg SSHConfig) *SSHSession {
 	}
 
 	session := &SSHSession{
-		name:            cfg.Name,
-		host:            cfg.Host,
-		port:            cfg.Port,
-		user:            cfg.User,
-		keyFile:         cfg.KeyFile,
-		password:        password,
-		jumpHost:        cfg.JumpHost,
-		agentForwarding: cfg.AgentForwarding,
-		env:             make(map[string]string),
-		connectTimeout:  cfg.ConnectTimeout,
-		commandTimeout:  cfg.Timeout,
-		startupCommands: cfg.StartupCommands,
+		name:                  cfg.Name,
+		host:                  cfg.Host,
+		port:                  cfg.Port,
+		user:                  cfg.User,
+		keyFile:               cfg.KeyFile,
+		password:              password,
+		jumpHost:              cfg.JumpHost,
+		agentForwarding:       cfg.AgentForwarding,
+		insecureIgnoreHostKey: cfg.InsecureIgnoreHostKey,
+		env:                   make(map[string]string),
+		connectTimeout:        cfg.ConnectTimeout,
+		commandTimeout:        cfg.Timeout,
+		startupCommands:       cfg.StartupCommands,
 	}
 
 	return session
@@ -654,6 +657,12 @@ func (s *SSHSession) getKeyAuth(keyPath string) (ssh.AuthMethod, error) {
 
 // getHostKeyCallback returns the host key callback
 func (s *SSHSession) getHostKeyCallback() (ssh.HostKeyCallback, error) {
+	// For testing only: skip host key verification
+	if s.insecureIgnoreHostKey {
+		logger.Debug("SSH session %q: skipping host key verification (insecure mode)", s.name)
+		return ssh.InsecureIgnoreHostKey(), nil
+	}
+
 	home, _ := os.UserHomeDir()
 	knownHostsPath := filepath.Join(home, ".ssh", "known_hosts")
 

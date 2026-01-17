@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/scottgl9/thop/internal/config"
 	"github.com/scottgl9/thop/internal/session"
@@ -799,4 +800,228 @@ func TestGetHistoryFile(t *testing.T) {
 	if localHistory == prodHistory {
 		t.Error("different sessions should have different history files")
 	}
+}
+
+// Tests for background job commands
+
+func TestHandleSlashCommandBg(t *testing.T) {
+	app := createInteractiveTestApp(t)
+
+	// Bg without argument
+	err := app.handleSlashCommand("/bg")
+	if err == nil {
+		t.Error("expected error for /bg without argument")
+	}
+
+	// Capture stdout
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	// Start a background job
+	err = app.handleSlashCommand("/bg echo hello")
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	if err != nil {
+		t.Errorf("/bg should not error: %v", err)
+	}
+
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	output := buf.String()
+
+	if !strings.Contains(output, "[1] Started in background") {
+		t.Errorf("expected 'Started in background' message, got: %s", output)
+	}
+}
+
+func TestHandleSlashCommandJobs(t *testing.T) {
+	app := createInteractiveTestApp(t)
+
+	// Capture stdout
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	// List jobs (should be empty)
+	err := app.handleSlashCommand("/jobs")
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	if err != nil {
+		t.Errorf("/jobs should not error: %v", err)
+	}
+
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	output := buf.String()
+
+	if !strings.Contains(output, "No background jobs") {
+		t.Errorf("expected 'No background jobs' message, got: %s", output)
+	}
+}
+
+func TestHandleSlashCommandFg(t *testing.T) {
+	app := createInteractiveTestApp(t)
+
+	// Fg without argument
+	err := app.handleSlashCommand("/fg")
+	if err == nil {
+		t.Error("expected error for /fg without argument")
+	}
+
+	// Fg with invalid job ID
+	err = app.handleSlashCommand("/fg abc")
+	if err == nil {
+		t.Error("expected error for /fg with invalid job ID")
+	}
+	if !strings.Contains(err.Error(), "invalid job ID") {
+		t.Errorf("expected 'invalid job ID' error, got: %v", err)
+	}
+
+	// Fg with non-existent job
+	err = app.handleSlashCommand("/fg 999")
+	if err == nil {
+		t.Error("expected error for /fg with non-existent job")
+	}
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("expected 'not found' error, got: %v", err)
+	}
+}
+
+func TestHandleSlashCommandKill(t *testing.T) {
+	app := createInteractiveTestApp(t)
+
+	// Kill without argument
+	err := app.handleSlashCommand("/kill")
+	if err == nil {
+		t.Error("expected error for /kill without argument")
+	}
+
+	// Kill with invalid job ID
+	err = app.handleSlashCommand("/kill abc")
+	if err == nil {
+		t.Error("expected error for /kill with invalid job ID")
+	}
+	if !strings.Contains(err.Error(), "invalid job ID") {
+		t.Errorf("expected 'invalid job ID' error, got: %v", err)
+	}
+
+	// Kill with non-existent job
+	err = app.handleSlashCommand("/kill 999")
+	if err == nil {
+		t.Error("expected error for /kill with non-existent job")
+	}
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("expected 'not found' error, got: %v", err)
+	}
+}
+
+func TestCmdBgAndJobs(t *testing.T) {
+	app := createInteractiveTestApp(t)
+
+	// Start a background job
+	oldStdout := os.Stdout
+	_, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := app.cmdBg("echo test")
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	if err != nil {
+		t.Errorf("cmdBg should not error: %v", err)
+	}
+
+	// Verify job was added
+	app.bgJobsMu.RLock()
+	jobCount := len(app.bgJobs)
+	app.bgJobsMu.RUnlock()
+
+	if jobCount != 1 {
+		t.Errorf("expected 1 job, got %d", jobCount)
+	}
+
+	// List jobs
+	oldStdout = os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err = app.cmdJobs()
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	if err != nil {
+		t.Errorf("cmdJobs should not error: %v", err)
+	}
+
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	output := buf.String()
+
+	if !strings.Contains(output, "Background jobs") {
+		t.Errorf("expected 'Background jobs' header, got: %s", output)
+	}
+
+	if !strings.Contains(output, "echo test") {
+		t.Errorf("expected job command in output, got: %s", output)
+	}
+}
+
+func TestTruncateString(t *testing.T) {
+	tests := []struct {
+		input    string
+		maxLen   int
+		expected string
+	}{
+		{"hello", 10, "hello"},
+		{"hello", 5, "hello"},
+		{"hello world", 10, "hello w..."},
+		{"hello world", 8, "hello..."},
+		{"ab", 5, "ab"},
+		{"", 5, ""},
+	}
+
+	for _, tt := range tests {
+		result := truncateString(tt.input, tt.maxLen)
+		if result != tt.expected {
+			t.Errorf("truncateString(%q, %d) = %q, want %q", tt.input, tt.maxLen, result, tt.expected)
+		}
+	}
+}
+
+func TestFormatDuration(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"100ms", "100ms"},
+		{"500ms", "500ms"},
+		{"1s", "1.0s"},
+		{"1500ms", "1.5s"},
+		{"30s", "30.0s"},
+		{"90s", "1.5m"},
+		{"2m", "2.0m"},
+	}
+
+	for _, tt := range tests {
+		d, err := parseDurationForTest(tt.input)
+		if err != nil {
+			t.Fatalf("failed to parse duration %q: %v", tt.input, err)
+		}
+		result := formatDuration(d)
+		if result != tt.expected {
+			t.Errorf("formatDuration(%s) = %q, want %q", tt.input, result, tt.expected)
+		}
+	}
+}
+
+// Helper to parse duration for test
+func parseDurationForTest(s string) (time.Duration, error) {
+	return time.ParseDuration(s)
 }

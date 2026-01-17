@@ -5,6 +5,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sync"
+	"time"
 
 	"github.com/chzyer/readline"
 	"github.com/scottgl9/thop/internal/config"
@@ -12,6 +14,19 @@ import (
 	"github.com/scottgl9/thop/internal/session"
 	"github.com/scottgl9/thop/internal/state"
 )
+
+// BackgroundJob represents a command running in the background
+type BackgroundJob struct {
+	ID        int
+	Command   string
+	Session   string
+	StartTime time.Time
+	EndTime   time.Time
+	Status    string // "running", "completed", "failed"
+	ExitCode  int
+	Stdout    string
+	Stderr    string
+}
 
 // App represents the thop application
 type App struct {
@@ -33,6 +48,11 @@ type App struct {
 
 	// readline instance for interactive mode (nil when not in interactive mode)
 	rl *readline.Instance
+
+	// Background job tracking
+	bgJobs   map[int]*BackgroundJob
+	bgJobsMu sync.RWMutex
+	nextJobID int
 }
 
 // NewApp creates a new App instance
@@ -41,6 +61,8 @@ func NewApp(version, commit, buildTime string) *App {
 		Version:   version,
 		GitCommit: commit,
 		BuildTime: buildTime,
+		bgJobs:    make(map[int]*BackgroundJob),
+		nextJobID: 1,
 	}
 }
 

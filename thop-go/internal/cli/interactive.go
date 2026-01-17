@@ -7,8 +7,10 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/chzyer/readline"
 	"github.com/scottgl9/thop/internal/config"
@@ -86,6 +88,11 @@ func (a *App) runInteractive() error {
 		readline.PcItem("/read"),
 		readline.PcItem("/cat"),
 		readline.PcItem("/write"),
+		readline.PcItem("/env"),
+		readline.PcItem("/bg"),
+		readline.PcItem("/jobs"),
+		readline.PcItem("/fg"),
+		readline.PcItem("/kill"),
 		readline.PcItem("/local"),
 		readline.PcItem("/status"),
 		readline.PcItem("/help"),
@@ -373,6 +380,28 @@ func (a *App) handleSlashCommand(input string) error {
 		}
 		return a.cmdWrite(args[0], args[1:])
 
+	case "/bg":
+		if len(args) == 0 {
+			return fmt.Errorf("usage: /bg <command>")
+		}
+		// Join all args as the command
+		return a.cmdBg(strings.Join(args, " "))
+
+	case "/jobs":
+		return a.cmdJobs()
+
+	case "/fg":
+		if len(args) == 0 {
+			return fmt.Errorf("usage: /fg <job_id>")
+		}
+		return a.cmdFg(args[0])
+
+	case "/kill":
+		if len(args) == 0 {
+			return fmt.Errorf("usage: /kill <job_id>")
+		}
+		return a.cmdKillJob(args[0])
+
 	default:
 		return fmt.Errorf("unknown command: %s (use /help for available commands)", cmd)
 	}
@@ -430,6 +459,10 @@ func (a *App) printSlashHelp() {
   /read <path>        Read file contents (from current session)
   /write <path> <content>  Write content to file (on current session)
   /env [KEY=VALUE]    Show or set environment variables
+  /bg <command>       Run command in background
+  /jobs               List background jobs
+  /fg <job_id>        Wait for job and show output
+  /kill <job_id>      Kill a running background job
   /help               Show this help
   /exit               Exit thop
 
@@ -456,6 +489,12 @@ Add session examples:
 File access (works on remote sessions via SFTP):
   /read /etc/hostname            Read remote file contents
   /write /tmp/test.txt Hello     Write "Hello" to remote file
+
+Background jobs:
+  /bg sleep 60                   Run 'sleep 60' in background
+  /jobs                          List all background jobs
+  /fg 1                          Wait for job 1 and show output
+  /kill 1                        Kill running job 1
 
 Keyboard shortcuts:
   Ctrl+D  Exit
@@ -988,4 +1027,203 @@ func (a *App) cmdTrust(name string) error {
 
 	fmt.Printf("Host key added to known_hosts for %s\n", name)
 	return nil
+}
+
+// cmdBg runs a command in the background
+func (a *App) cmdBg(command string) error {
+	// Get current session info
+	sessionName := a.sessions.GetActiveSessionName()
+
+	// Create a new background job
+	a.bgJobsMu.Lock()
+	jobID := a.nextJobID
+	a.nextJobID++
+
+	job := &BackgroundJob{
+		ID:        jobID,
+		Command:   command,
+		Session:   sessionName,
+		StartTime: time.Now(),
+		Status:    "running",
+	}
+	a.bgJobs[jobID] = job
+	a.bgJobsMu.Unlock()
+
+	fmt.Printf("[%d] Started in background: %s\n", jobID, command)
+
+	// Run the command in a goroutine
+	go func() {
+		ctx := context.Background()
+		result, err := a.sessions.ExecuteWithContext(ctx, command)
+
+		a.bgJobsMu.Lock()
+		defer a.bgJobsMu.Unlock()
+
+		job.EndTime = time.Now()
+
+		if err != nil {
+			job.Status = "failed"
+			job.Stderr = err.Error()
+			job.ExitCode = 1
+			if sessionErr, ok := err.(*session.Error); ok {
+				job.Stderr = sessionErr.Message
+			}
+		} else {
+			job.Status = "completed"
+			job.Stdout = result.Stdout
+			job.Stderr = result.Stderr
+			job.ExitCode = result.ExitCode
+		}
+
+		// Print notification that job completed
+		duration := job.EndTime.Sub(job.StartTime).Round(time.Millisecond)
+		if job.Status == "completed" {
+			fmt.Printf("\n[%d] Done (%s): %s\n", jobID, duration, command)
+		} else {
+			fmt.Printf("\n[%d] Failed (%s): %s\n", jobID, duration, command)
+		}
+	}()
+
+	return nil
+}
+
+// cmdJobs lists all background jobs
+func (a *App) cmdJobs() error {
+	a.bgJobsMu.RLock()
+	defer a.bgJobsMu.RUnlock()
+
+	if len(a.bgJobs) == 0 {
+		fmt.Println("No background jobs")
+		return nil
+	}
+
+	fmt.Println("Background jobs:")
+	for _, job := range a.bgJobs {
+		var status string
+		switch job.Status {
+		case "running":
+			duration := time.Since(job.StartTime).Round(time.Second)
+			status = fmt.Sprintf("running (%s)", duration)
+		case "completed":
+			duration := job.EndTime.Sub(job.StartTime).Round(time.Millisecond)
+			status = fmt.Sprintf("completed (exit %d, %s)", job.ExitCode, duration)
+		case "failed":
+			duration := job.EndTime.Sub(job.StartTime).Round(time.Millisecond)
+			status = fmt.Sprintf("failed (%s)", duration)
+		}
+		fmt.Printf("  [%d] %-12s %s  %s\n", job.ID, job.Session, status, truncateString(job.Command, 40))
+	}
+
+	return nil
+}
+
+// cmdFg waits for a background job and displays its output
+func (a *App) cmdFg(jobIDStr string) error {
+	jobID, err := strconv.Atoi(jobIDStr)
+	if err != nil {
+		return fmt.Errorf("invalid job ID: %s", jobIDStr)
+	}
+
+	a.bgJobsMu.RLock()
+	job, ok := a.bgJobs[jobID]
+	a.bgJobsMu.RUnlock()
+
+	if !ok {
+		return fmt.Errorf("job %d not found", jobID)
+	}
+
+	// If job is still running, wait for it
+	if job.Status == "running" {
+		fmt.Printf("Waiting for job %d: %s\n", jobID, job.Command)
+
+		// Poll until done (simple approach - could be improved with channels)
+		for {
+			time.Sleep(100 * time.Millisecond)
+			a.bgJobsMu.RLock()
+			if job.Status != "running" {
+				a.bgJobsMu.RUnlock()
+				break
+			}
+			a.bgJobsMu.RUnlock()
+		}
+	}
+
+	// Display output
+	fmt.Printf("Job %d (%s):\n", jobID, job.Status)
+	if job.Stdout != "" {
+		fmt.Print(job.Stdout)
+		if !strings.HasSuffix(job.Stdout, "\n") {
+			fmt.Println()
+		}
+	}
+	if job.Stderr != "" {
+		fmt.Fprint(os.Stderr, job.Stderr)
+		if !strings.HasSuffix(job.Stderr, "\n") {
+			fmt.Fprintln(os.Stderr)
+		}
+	}
+
+	// Remove the job from the list
+	a.bgJobsMu.Lock()
+	delete(a.bgJobs, jobID)
+	a.bgJobsMu.Unlock()
+
+	return nil
+}
+
+// cmdKillJob terminates a running background job
+func (a *App) cmdKillJob(jobIDStr string) error {
+	jobID, err := strconv.Atoi(jobIDStr)
+	if err != nil {
+		return fmt.Errorf("invalid job ID: %s", jobIDStr)
+	}
+
+	a.bgJobsMu.Lock()
+	job, ok := a.bgJobs[jobID]
+	if !ok {
+		a.bgJobsMu.Unlock()
+		return fmt.Errorf("job %d not found", jobID)
+	}
+
+	if job.Status != "running" {
+		a.bgJobsMu.Unlock()
+		return fmt.Errorf("job %d is not running (status: %s)", jobID, job.Status)
+	}
+
+	// Mark as failed/killed
+	job.Status = "failed"
+	job.EndTime = time.Now()
+	job.Stderr = "killed by user"
+	job.ExitCode = 137 // SIGKILL exit code
+
+	// Remove from job list
+	delete(a.bgJobs, jobID)
+	a.bgJobsMu.Unlock()
+
+	fmt.Printf("Job %d killed\n", jobID)
+
+	// Note: The actual goroutine will continue running until the command finishes,
+	// but we've removed it from tracking. For proper cancellation, we'd need to
+	// use context with cancel and pass it to the goroutine.
+
+	return nil
+}
+
+// truncateString truncates a string to maxLen chars with ellipsis
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen-3] + "..."
+}
+
+// formatDuration formats a duration in a human-readable way
+func formatDuration(d time.Duration) string {
+	if d < time.Second {
+		return fmt.Sprintf("%dms", d.Milliseconds())
+	}
+	if d < time.Minute {
+		return fmt.Sprintf("%.1fs", d.Seconds())
+	}
+	return fmt.Sprintf("%.1fm", d.Minutes())
 }

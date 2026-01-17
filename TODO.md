@@ -169,8 +169,8 @@ After language selection, implement full MVP in chosen language.
 - [x] Command history per session
 
 ### Async Features
-- [ ] Async command execution
-- [ ] Background command with status polling
+- [x] Async command execution (/bg command)
+- [x] Background command with status polling (/jobs, /fg, /kill commands)
 
 ### Future
 - [ ] MCP server wrapper
