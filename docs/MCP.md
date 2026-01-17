@@ -16,7 +16,7 @@ The MCP server communicates via JSON-RPC over stdin/stdout, following the MCP pr
 
 ## Available Tools
 
-The MCP server exposes the following tools for AI agents:
+The MCP server exposes a streamlined set of tools for AI agents:
 
 ### Session Management
 
@@ -39,54 +39,41 @@ The MCP server exposes the following tools for AI agents:
   - `session` (string, optional): Specific session to execute in
   - `timeout` (integer, optional): Command timeout in seconds (default: 300)
 
+  This is the primary tool for interacting with sessions. Use it to run any command including file operations (`cat`, `ls`, `echo`, etc.), environment management (`export`, `env`), directory navigation (`cd`, `pwd`), and more.
+
 - **executeBackground** - Execute a command in the background (not yet implemented)
   - `command` (string, required): Command to execute in background
   - `session` (string, optional): Specific session to execute in
 
-### File Operations
+### Design Philosophy
 
-- **readFile** - Read a file from the active session
-  - `path` (string, required): Path to the file to read
-  - `session` (string, optional): Specific session to read from
+The MCP server follows a minimalist design philosophy:
 
-- **writeFile** - Write content to a file in the active session
-  - `path` (string, required): Path to the file to write
-  - `content` (string, required): Content to write to the file
-  - `session` (string, optional): Specific session to write to
+- **Single execution tool**: The `execute` tool handles all command execution needs, avoiding duplication
+- **Use shell commands directly**: Instead of specialized tools for file operations, environment management, or directory navigation, use standard shell commands through `execute`
+- **Resources for read-only data**: Configuration and state information is exposed through MCP resources rather than duplicate tools
 
-- **listFiles** - List files in a directory
-  - `path` (string, optional): Directory path to list (default: ".")
-  - `session` (string, optional): Specific session to list from
+#### Examples
 
-### Environment and State
+```bash
+# Read a file
+execute: "cat /path/to/file"
 
-- **getEnvironment** - Get environment variables from the active session
-  - `session` (string, optional): Specific session to get environment from
+# Write a file
+execute: "echo 'content' > /path/to/file"
 
-- **setEnvironment** - Set environment variables in the active session
-  - `variables` (object, required): Key-value pairs of environment variables
-  - `session` (string, optional): Specific session to set environment in
+# List files
+execute: "ls -la /path"
 
-- **getCwd** - Get current working directory of the active session
-  - `session` (string, optional): Specific session to get cwd from
+# Change directory (persists in session)
+execute: "cd /new/directory"
 
-- **setCwd** - Set current working directory of the active session
-  - `path` (string, required): Directory path to change to
-  - `session` (string, optional): Specific session to set cwd in
+# Set environment variable
+execute: "export VAR=value"
 
-### Job Management (Not Yet Implemented)
-
-- **listJobs** - List background jobs
-- **getJobOutput** - Get output from a background job
-- **killJob** - Kill a background job
-
-### Configuration
-
-- **getConfig** - Get thop configuration
-  - No parameters required
-
-- **listSessions** - List all configured sessions
-  - No parameters required
+# Check current directory
+execute: "pwd"
+```
 
 ## Available Resources
 
