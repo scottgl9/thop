@@ -161,7 +161,7 @@ func TestMCPServer_ToolsList(t *testing.T) {
 
 	expectedTools := []string{
 		"connect", "switch", "close", "status",
-		"execute", "executeBackground",
+		"execute",
 	}
 
 	for _, expected := range expectedTools {
@@ -170,9 +170,9 @@ func TestMCPServer_ToolsList(t *testing.T) {
 		}
 	}
 
-	// Ensure we only have these 6 tools
-	if len(tools) != 6 {
-		t.Errorf("Expected exactly 6 tools, got %d", len(tools))
+	// Ensure we only have these 5 tools
+	if len(tools) != 5 {
+		t.Errorf("Expected exactly 5 tools, got %d", len(tools))
 	}
 }
 

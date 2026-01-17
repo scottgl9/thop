@@ -37,13 +37,10 @@ The MCP server exposes a streamlined set of tools for AI agents:
 - **execute** - Execute a command in the active session
   - `command` (string, required): Command to execute
   - `session` (string, optional): Specific session to execute in
-  - `timeout` (integer, optional): Command timeout in seconds (default: 300)
+  - `timeout` (integer, optional): Command timeout in seconds (default: 300, ignored if background is true)
+  - `background` (boolean, optional): Run command in background (default: false, not yet implemented)
 
   This is the primary tool for interacting with sessions. Use it to run any command including file operations (`cat`, `ls`, `echo`, etc.), environment management (`export`, `env`), directory navigation (`cd`, `pwd`), and more.
-
-- **executeBackground** - Execute a command in the background (not yet implemented)
-  - `command` (string, required): Command to execute in background
-  - `session` (string, optional): Specific session to execute in
 
 ### Design Philosophy
 
