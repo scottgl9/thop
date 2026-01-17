@@ -81,19 +81,6 @@ The MCP server provides the following resources:
 - **config://thop** - Current thop configuration
 - **state://thop** - Current thop state including session states
 
-## Available Prompts
-
-The MCP server includes pre-defined prompt templates:
-
-- **deploy** - Deploy code to a remote server
-  - Arguments: `server` (required), `branch` (optional)
-
-- **debug** - Debug an issue on a remote server
-  - Arguments: `server` (required), `service` (optional)
-
-- **backup** - Create a backup of files on a server
-  - Arguments: `server` (required), `path` (required)
-
 ## Example Integration
 
 ### Using with Claude Desktop
@@ -128,7 +115,6 @@ The MCP server implements the MCP protocol version 2024-11-05 and supports:
 
 - **Tools**: Full support for tool discovery and invocation
 - **Resources**: Read-only access to session and configuration data
-- **Prompts**: Pre-defined prompt templates for common operations
 - **Logging**: Structured logging support
 
 ## Example Tool Call
