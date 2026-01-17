@@ -380,20 +380,27 @@ func TestCmdCloseNotConnected(t *testing.T) {
 }
 
 func TestFormatPrompt(t *testing.T) {
-	prompt := session.FormatPrompt("local", "")
+	// Use plain version for predictable testing
+	prompt := session.FormatPromptPlain("local", "")
 	if prompt != "(local) $ " {
 		t.Errorf("expected '(local) $ ', got '%s'", prompt)
 	}
 
-	prompt = session.FormatPrompt("prod", "")
+	prompt = session.FormatPromptPlain("prod", "")
 	if prompt != "(prod) $ " {
 		t.Errorf("expected '(prod) $ ', got '%s'", prompt)
 	}
 
 	// Test with cwd
-	prompt = session.FormatPrompt("local", "/var/log")
+	prompt = session.FormatPromptPlain("local", "/var/log")
 	if prompt != "(local) /var/log $ " {
 		t.Errorf("expected '(local) /var/log $ ', got '%s'", prompt)
+	}
+
+	// Test that colored version contains ANSI codes
+	coloredPrompt := session.FormatPrompt("local", "")
+	if !strings.Contains(coloredPrompt, "\033[") {
+		t.Error("Colored prompt should contain ANSI escape codes")
 	}
 }
 

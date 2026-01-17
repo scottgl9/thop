@@ -95,29 +95,65 @@ func CopyOutput(dst io.Writer, src io.Reader) error {
 	return err
 }
 
+// ANSI color codes for prompt
+const (
+	colorReset  = "\033[0m"
+	colorGreen  = "\033[32m"
+	colorBlue   = "\033[34m"
+	colorCyan   = "\033[36m"
+	colorYellow = "\033[33m"
+)
+
 // FormatPrompt formats the prompt for a session
 // If cwd is provided, it will be shown after the session name
 // The cwd is shortened: home directory becomes ~, long paths are truncated
 func FormatPrompt(sessionName, cwd string) string {
-	if cwd == "" {
-		return fmt.Sprintf("(%s) $ ", sessionName)
-	}
+	return formatPromptWithColor(sessionName, cwd, true)
+}
 
+// FormatPromptPlain formats the prompt without colors
+func FormatPromptPlain(sessionName, cwd string) string {
+	return formatPromptWithColor(sessionName, cwd, false)
+}
+
+func formatPromptWithColor(sessionName, cwd string, useColor bool) string {
 	// Shorten home directory to ~
 	displayCwd := cwd
-	if home, err := os.UserHomeDir(); err == nil && home != "" {
-		if displayCwd == home {
-			displayCwd = "~"
-		} else if strings.HasPrefix(displayCwd, home+"/") {
-			displayCwd = "~" + displayCwd[len(home):]
+	if cwd != "" {
+		if home, err := os.UserHomeDir(); err == nil && home != "" {
+			if displayCwd == home {
+				displayCwd = "~"
+			} else if strings.HasPrefix(displayCwd, home+"/") {
+				displayCwd = "~" + displayCwd[len(home):]
+			}
+		}
+
+		// Truncate long paths to show only last 3 components
+		parts := strings.Split(displayCwd, "/")
+		if len(parts) > 4 && !strings.HasPrefix(displayCwd, "~") {
+			displayCwd = ".../" + strings.Join(parts[len(parts)-3:], "/")
 		}
 	}
 
-	// Truncate long paths to show only last 3 components
-	parts := strings.Split(displayCwd, "/")
-	if len(parts) > 4 && !strings.HasPrefix(displayCwd, "~") {
-		displayCwd = ".../" + strings.Join(parts[len(parts)-3:], "/")
+	if !useColor {
+		if displayCwd == "" {
+			return fmt.Sprintf("(%s) $ ", sessionName)
+		}
+		return fmt.Sprintf("(%s) %s $ ", sessionName, displayCwd)
 	}
 
-	return fmt.Sprintf("(%s) %s $ ", sessionName, displayCwd)
+	// Colored prompt: (session) cwd $
+	// - session name in green for local, cyan for SSH
+	sessionColor := colorGreen
+	if sessionName != "local" {
+		sessionColor = colorCyan
+	}
+
+	if displayCwd == "" {
+		return fmt.Sprintf("(%s%s%s) $ ", sessionColor, sessionName, colorReset)
+	}
+
+	return fmt.Sprintf("(%s%s%s) %s%s%s $ ",
+		sessionColor, sessionName, colorReset,
+		colorBlue, displayCwd, colorReset)
 }

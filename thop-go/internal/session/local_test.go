@@ -304,34 +304,40 @@ func TestLocalSessionSetShell(t *testing.T) {
 }
 
 func TestFormatPrompt(t *testing.T) {
-	// Test without cwd
-	prompt := FormatPrompt("local", "")
+	// Test without cwd (use plain version for predictable testing)
+	prompt := FormatPromptPlain("local", "")
 	if prompt != "(local) $ " {
 		t.Errorf("expected '(local) $ ', got '%s'", prompt)
 	}
 
-	prompt = FormatPrompt("prod", "")
+	prompt = FormatPromptPlain("prod", "")
 	if prompt != "(prod) $ " {
 		t.Errorf("expected '(prod) $ ', got '%s'", prompt)
 	}
 
 	// Test with cwd
-	prompt = FormatPrompt("local", "/tmp")
+	prompt = FormatPromptPlain("local", "/tmp")
 	if prompt != "(local) /tmp $ " {
 		t.Errorf("expected '(local) /tmp $ ', got '%s'", prompt)
 	}
 
 	// Test with home directory shortening
 	home, _ := os.UserHomeDir()
-	prompt = FormatPrompt("local", home)
+	prompt = FormatPromptPlain("local", home)
 	if prompt != "(local) ~ $ " {
 		t.Errorf("expected '(local) ~ $ ', got '%s'", prompt)
 	}
 
 	// Test with subdirectory of home
-	prompt = FormatPrompt("local", home+"/projects")
+	prompt = FormatPromptPlain("local", home+"/projects")
 	if prompt != "(local) ~/projects $ " {
 		t.Errorf("expected '(local) ~/projects $ ', got '%s'", prompt)
+	}
+
+	// Test that colored version contains ANSI codes
+	coloredPrompt := FormatPrompt("local", "")
+	if !strings.Contains(coloredPrompt, "\033[") {
+		t.Error("Colored prompt should contain ANSI escape codes")
 	}
 }
 

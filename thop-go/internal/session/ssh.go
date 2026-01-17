@@ -417,13 +417,21 @@ func (s *SSHSession) executeRawWithContext(ctx context.Context, cmdStr string) (
 
 	// Build environment prefix (export commands)
 	// This is more reliable than session.Setenv which requires server AcceptEnv config
-	if len(s.env) > 0 {
-		var envPrefix strings.Builder
-		for k, v := range s.env {
-			// Escape single quotes in value
-			escapedVal := strings.ReplaceAll(v, "'", "'\\''")
-			envPrefix.WriteString(fmt.Sprintf("export %s='%s'; ", k, escapedVal))
-		}
+	var envPrefix strings.Builder
+
+	// Add color-related environment variables for better terminal experience
+	envPrefix.WriteString("export TERM=${TERM:-xterm-256color}; ")
+	envPrefix.WriteString("export CLICOLOR=1; ")
+	envPrefix.WriteString("export CLICOLOR_FORCE=1; ")
+
+	// Add user-defined environment variables
+	for k, v := range s.env {
+		// Escape single quotes in value
+		escapedVal := strings.ReplaceAll(v, "'", "'\\''")
+		envPrefix.WriteString(fmt.Sprintf("export %s='%s'; ", k, escapedVal))
+	}
+
+	if envPrefix.Len() > 0 {
 		cmdStr = envPrefix.String() + cmdStr
 	}
 

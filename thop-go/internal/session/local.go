@@ -135,6 +135,28 @@ func (s *LocalSession) ExecuteWithContext(ctx context.Context, cmdStr string) (*
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
 
+	// Ensure TERM is set for color support
+	hasTerm := false
+	for _, e := range cmd.Env {
+		if strings.HasPrefix(e, "TERM=") {
+			hasTerm = true
+			break
+		}
+	}
+	if !hasTerm {
+		cmd.Env = append(cmd.Env, "TERM=xterm-256color")
+	}
+
+	// Enable color output for common commands
+	// CLICOLOR=1 enables colors for BSD/macOS commands
+	// CLICOLOR_FORCE=1 forces colors even when not a TTY
+	cmd.Env = append(cmd.Env, "CLICOLOR=1")
+	cmd.Env = append(cmd.Env, "CLICOLOR_FORCE=1")
+	// GCC_COLORS enables colored diagnostics in GCC
+	if !hasEnvPrefix(cmd.Env, "GCC_COLORS=") {
+		cmd.Env = append(cmd.Env, "GCC_COLORS=error=01;31:warning=01;35:note=01;36:caret=01;32:locus=01:quote=01")
+	}
+
 	// Capture output
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -280,4 +302,14 @@ func (s *LocalSession) SetEnv(key, value string) {
 // SetShell sets the shell to use
 func (s *LocalSession) SetShell(shell string) {
 	s.shell = shell
+}
+
+// hasEnvPrefix checks if any environment variable starts with the given prefix
+func hasEnvPrefix(env []string, prefix string) bool {
+	for _, e := range env {
+		if strings.HasPrefix(e, prefix) {
+			return true
+		}
+	}
+	return false
 }
