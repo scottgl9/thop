@@ -8,6 +8,7 @@ A lightweight CLI tool that enables AI agents to execute commands across local a
 - **SSH config integration**: Automatically reads `~/.ssh/config` for host aliases
 - **Context switching**: Switch between sessions with simple slash commands
 - **Proxy mode**: Use as a SHELL for AI agents like Claude Code
+- **MCP server**: Built-in Model Context Protocol server for AI agent integration
 - **State persistence**: Maintains working directory and environment across commands
 - **Shell completions**: Tab completion for bash, zsh, and fish
 
@@ -65,6 +66,16 @@ SHELL="thop --proxy" claude
 
 # Read commands from stdin
 echo "ls -la" | thop --proxy
+```
+
+### MCP Server Mode
+
+```bash
+# Start as MCP server
+thop --mcp
+
+# Configure in Claude Desktop
+# See docs/MCP.md for full configuration
 ```
 
 ## Configuration
@@ -285,6 +296,7 @@ With agent forwarding enabled, you can use git over SSH, SSH to other servers, o
 | Flag | Description |
 |------|-------------|
 | `--proxy` | Run in proxy mode (for AI agents) |
+| `--mcp` | Run as MCP server (Model Context Protocol) |
 | `-c <cmd>` | Execute command and exit |
 | `--status` | Show status and exit |
 | `--config <path>` | Use alternate config file |
@@ -405,6 +417,7 @@ thop-go/
 ├── internal/
 │   ├── cli/           # CLI handling (interactive, proxy, completions)
 │   ├── config/        # Configuration parsing
+│   ├── mcp/           # MCP server implementation
 │   ├── session/       # Session management (local, SSH)
 │   ├── sshconfig/     # SSH config parsing
 │   └── state/         # State persistence
