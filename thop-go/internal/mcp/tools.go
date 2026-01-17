@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/scottgl9/thop/internal/logger"
@@ -16,11 +17,41 @@ import (
 func (s *Server) toolConnect(ctx context.Context, args map[string]interface{}) (interface{}, error) {
 	sessionName, ok := args["session"].(string)
 	if !ok {
-		return s.errorResult("session parameter is required"), nil
+		return MissingParameterError("session").ToToolResult(), nil
 	}
 
 	if err := s.sessions.Connect(sessionName); err != nil {
-		return s.errorResult(fmt.Sprintf("Failed to connect: %v", err)), nil
+		// Parse error and return appropriate error code
+		errStr := err.Error()
+
+		// Check for specific error patterns
+		if strings.Contains(errStr, "not found") || strings.Contains(errStr, "does not exist") {
+			return SessionNotFoundError(sessionName).ToToolResult(), nil
+		}
+		if strings.Contains(errStr, "key") && strings.Contains(errStr, "auth") {
+			return AuthKeyFailedError(sessionName).ToToolResult(), nil
+		}
+		if strings.Contains(errStr, "password") {
+			return AuthPasswordFailedError(sessionName).ToToolResult(), nil
+		}
+		if strings.Contains(errStr, "host key") || strings.Contains(errStr, "known_hosts") {
+			return HostKeyUnknownError(sessionName).ToToolResult(), nil
+		}
+		if strings.Contains(errStr, "timeout") {
+			return NewMCPError(ErrorConnectionTimeout, "Connection timed out").
+				WithSession(sessionName).
+				WithSuggestion("Check network connectivity and firewall settings").
+				ToToolResult(), nil
+		}
+		if strings.Contains(errStr, "refused") {
+			return NewMCPError(ErrorConnectionRefused, "Connection refused").
+				WithSession(sessionName).
+				WithSuggestion("Verify the host and port are correct").
+				ToToolResult(), nil
+		}
+
+		// Generic connection failure
+		return ConnectionFailedError(sessionName, errStr).ToToolResult(), nil
 	}
 
 	return ToolCallResult{
@@ -37,17 +68,26 @@ func (s *Server) toolConnect(ctx context.Context, args map[string]interface{}) (
 func (s *Server) toolSwitch(ctx context.Context, args map[string]interface{}) (interface{}, error) {
 	sessionName, ok := args["session"].(string)
 	if !ok {
-		return s.errorResult("session parameter is required"), nil
+		return MissingParameterError("session").ToToolResult(), nil
 	}
 
 	if err := s.sessions.SetActiveSession(sessionName); err != nil {
-		return s.errorResult(fmt.Sprintf("Failed to switch session: %v", err)), nil
+		errStr := err.Error()
+		if strings.Contains(errStr, "not found") {
+			return SessionNotFoundError(sessionName).ToToolResult(), nil
+		}
+		if strings.Contains(errStr, "not connected") {
+			return SessionNotConnectedError(sessionName).ToToolResult(), nil
+		}
+		return NewMCPError(ErrorOperationFailed, fmt.Sprintf("Failed to switch session: %v", err)).
+			WithSession(sessionName).
+			ToToolResult(), nil
 	}
 
 	// Get session info
 	sess, ok := s.sessions.GetSession(sessionName)
 	if !ok || sess == nil {
-		return s.errorResult("Session not found after switch"), nil
+		return SessionNotFoundError(sessionName).ToToolResult(), nil
 	}
 
 	cwd := sess.GetCWD()
@@ -65,11 +105,23 @@ func (s *Server) toolSwitch(ctx context.Context, args map[string]interface{}) (i
 func (s *Server) toolClose(ctx context.Context, args map[string]interface{}) (interface{}, error) {
 	sessionName, ok := args["session"].(string)
 	if !ok {
-		return s.errorResult("session parameter is required"), nil
+		return MissingParameterError("session").ToToolResult(), nil
 	}
 
 	if err := s.sessions.Disconnect(sessionName); err != nil {
-		return s.errorResult(fmt.Sprintf("Failed to close session: %v", err)), nil
+		errStr := err.Error()
+		if strings.Contains(errStr, "not found") {
+			return SessionNotFoundError(sessionName).ToToolResult(), nil
+		}
+		if strings.Contains(errStr, "cannot close local") || strings.Contains(errStr, "local session") {
+			return NewMCPError(ErrorCannotCloseLocal, "Cannot close the local session").
+				WithSession(sessionName).
+				WithSuggestion("Use /switch to change to another session instead").
+				ToToolResult(), nil
+		}
+		return NewMCPError(ErrorOperationFailed, fmt.Sprintf("Failed to close session: %v", err)).
+			WithSession(sessionName).
+			ToToolResult(), nil
 	}
 
 	return ToolCallResult{
@@ -89,7 +141,9 @@ func (s *Server) toolStatus(ctx context.Context, args map[string]interface{}) (i
 	// Format status as JSON
 	data, err := json.MarshalIndent(sessions, "", "  ")
 	if err != nil {
-		return s.errorResult(fmt.Sprintf("Failed to format status: %v", err)), nil
+		return NewMCPError(ErrorOperationFailed, fmt.Sprintf("Failed to format status: %v", err)).
+			WithSuggestion("Check system resources and try again").
+			ToToolResult(), nil
 	}
 
 	return ToolCallResult{
@@ -107,16 +161,11 @@ func (s *Server) toolStatus(ctx context.Context, args map[string]interface{}) (i
 func (s *Server) toolExecute(ctx context.Context, args map[string]interface{}) (interface{}, error) {
 	command, ok := args["command"].(string)
 	if !ok {
-		return s.errorResult("command parameter is required"), nil
+		return MissingParameterError("command").ToToolResult(), nil
 	}
 
 	sessionName, _ := args["session"].(string)
-	timeout := 300 // default 5 minutes
 	background := false
-
-	if t, ok := args["timeout"].(float64); ok {
-		timeout = int(t)
-	}
 
 	if bg, ok := args["background"].(bool); ok {
 		background = bg
@@ -128,20 +177,28 @@ func (s *Server) toolExecute(ctx context.Context, args map[string]interface{}) (
 		var ok bool
 		sess, ok = s.sessions.GetSession(sessionName)
 		if !ok || sess == nil {
-			return s.errorResult(fmt.Sprintf("Session not found: %s", sessionName)), nil
+			return SessionNotFoundError(sessionName).ToToolResult(), nil
 		}
+		sessionName = sess.Name() // Use actual session name
 	} else {
 		sess = s.sessions.GetActiveSession()
 		if sess == nil {
-			return s.errorResult("No active session"), nil
+			return NewMCPError(ErrorNoActiveSession, "No active session").
+				WithSuggestion("Use /connect to establish a session or specify a session name").
+				ToToolResult(), nil
 		}
+		sessionName = sess.Name()
+	}
+
+	// Determine timeout: explicit parameter > session config > global default
+	timeout := s.config.GetTimeout(sessionName)
+	if t, ok := args["timeout"].(float64); ok && int(t) > 0 {
+		timeout = int(t)
 	}
 
 	// Handle background execution
 	if background {
-		// TODO: Implement background job execution
-		// This requires extending the Session interface with background job support
-		return s.errorResult("Background execution not yet implemented"), nil
+		return NotImplementedError("Background execution").ToToolResult(), nil
 	}
 
 	// Execute the command with timeout
@@ -150,12 +207,38 @@ func (s *Server) toolExecute(ctx context.Context, args map[string]interface{}) (
 
 	result, err := sess.ExecuteWithContext(cmdCtx, command)
 	if err != nil {
-		// Include stderr in error if available
-		errorText := err.Error()
+		errStr := err.Error()
+
+		// Check for timeout
+		if strings.Contains(errStr, "context deadline exceeded") || strings.Contains(errStr, "timeout") {
+			return CommandTimeoutError(sessionName, timeout).ToToolResult(), nil
+		}
+
+		// Check for permission denied
+		if strings.Contains(errStr, "permission denied") {
+			return NewMCPError(ErrorPermissionDenied, "Permission denied").
+				WithSession(sessionName).
+				WithSuggestion("Check file/directory permissions or use sudo if appropriate").
+				ToToolResult(), nil
+		}
+
+		// Check for command not found
+		if strings.Contains(errStr, "command not found") || strings.Contains(errStr, "not found") {
+			return NewMCPError(ErrorCommandNotFound, fmt.Sprintf("Command not found: %s", command)).
+				WithSession(sessionName).
+				WithSuggestion("Verify the command is installed and in PATH").
+				ToToolResult(), nil
+		}
+
+		// Generic command failure
+		errorText := errStr
 		if result != nil && result.Stderr != "" {
 			errorText = fmt.Sprintf("%s\nStderr: %s", errorText, result.Stderr)
 		}
-		return s.errorResult(errorText), nil
+
+		return NewMCPError(ErrorCommandFailed, errorText).
+			WithSession(sessionName).
+			ToToolResult(), nil
 	}
 
 	// Prepare content

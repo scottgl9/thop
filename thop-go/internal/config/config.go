@@ -37,6 +37,7 @@ type Session struct {
 	PasswordEnv     string   `toml:"password_env,omitempty"`  // Environment variable containing password
 	PasswordFile    string   `toml:"password_file,omitempty"` // File containing password (must be 0600)
 	StartupCommands []string `toml:"startup_commands,omitempty"`
+	CommandTimeout  int      `toml:"command_timeout,omitempty"` // Command timeout in seconds (overrides global default)
 }
 
 // DefaultConfig returns a default configuration
@@ -144,6 +145,17 @@ func (c *Config) SessionNames() []string {
 		names = append(names, name)
 	}
 	return names
+}
+
+// GetTimeout returns the command timeout for a session (session-specific or global default)
+func (c *Config) GetTimeout(sessionName string) int {
+	if session, ok := c.Sessions[sessionName]; ok && session.CommandTimeout > 0 {
+		return session.CommandTimeout
+	}
+	if c.Settings.CommandTimeout > 0 {
+		return c.Settings.CommandTimeout
+	}
+	return 300 // Default 5 minutes
 }
 
 // AddSession adds a new session to the config
