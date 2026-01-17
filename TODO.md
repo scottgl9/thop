@@ -166,7 +166,7 @@ After language selection, implement full MVP in chosen language.
 ### Interactive Improvements
 - [ ] PTY support for interactive commands (vim, top)
 - [ ] Window resize handling (SIGWINCH)
-- [ ] Command history per session
+- [x] Command history per session
 
 ### Async Features
 - [ ] Async command execution

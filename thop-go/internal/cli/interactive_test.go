@@ -773,3 +773,30 @@ func TestParseHostSpec(t *testing.T) {
 		}
 	}
 }
+
+func TestGetHistoryFile(t *testing.T) {
+	// Test that history files are generated with session name suffix
+	localHistory := getHistoryFile("local")
+	if !strings.HasSuffix(localHistory, "history_local") {
+		t.Errorf("expected history file to end with 'history_local', got %q", localHistory)
+	}
+
+	prodHistory := getHistoryFile("prod-server")
+	if !strings.HasSuffix(prodHistory, "history_prod-server") {
+		t.Errorf("expected history file to end with 'history_prod-server', got %q", prodHistory)
+	}
+
+	// Test sanitization of special characters
+	slashHistory := getHistoryFile("server/name")
+	if strings.Contains(slashHistory, "/name") {
+		t.Errorf("expected slash to be sanitized, got %q", slashHistory)
+	}
+	if !strings.HasSuffix(slashHistory, "history_server_name") {
+		t.Errorf("expected history file to end with 'history_server_name', got %q", slashHistory)
+	}
+
+	// Test that different sessions get different history files
+	if localHistory == prodHistory {
+		t.Error("different sessions should have different history files")
+	}
+}

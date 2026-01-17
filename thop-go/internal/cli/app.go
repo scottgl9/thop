@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/chzyer/readline"
 	"github.com/scottgl9/thop/internal/config"
 	"github.com/scottgl9/thop/internal/logger"
 	"github.com/scottgl9/thop/internal/session"
@@ -29,6 +30,9 @@ type App struct {
 	completions  string // Shell name for completions
 	verbose      bool
 	quiet        bool
+
+	// readline instance for interactive mode (nil when not in interactive mode)
+	rl *readline.Instance
 }
 
 // NewApp creates a new App instance

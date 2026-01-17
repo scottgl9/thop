@@ -16,20 +16,51 @@ import (
 	"golang.org/x/term"
 )
 
+// getHistoryDir returns the directory for history files
+func getHistoryDir() string {
+	if dataDir := os.Getenv("XDG_DATA_HOME"); dataDir != "" {
+		return filepath.Join(dataDir, "thop")
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		return filepath.Join(home, ".local", "share", "thop")
+	}
+	return ""
+}
+
+// getHistoryFile returns the history file path for a given session
+func getHistoryFile(sessionName string) string {
+	dir := getHistoryDir()
+	if dir == "" {
+		return ""
+	}
+	// Sanitize session name for use in filename
+	safeName := strings.ReplaceAll(sessionName, "/", "_")
+	safeName = strings.ReplaceAll(safeName, "\\", "_")
+	return filepath.Join(dir, "history_"+safeName)
+}
+
+// switchHistory switches the command history to a different session
+func (a *App) switchHistory(sessionName string) {
+	if a.rl == nil {
+		return
+	}
+	newHistoryFile := getHistoryFile(sessionName)
+	if newHistoryFile != "" {
+		a.rl.SetHistoryPath(newHistoryFile)
+	}
+}
+
 // runInteractive runs the interactive shell mode
 func (a *App) runInteractive() error {
-	// Set up history file
-	historyFile := ""
-	if dataDir := os.Getenv("XDG_DATA_HOME"); dataDir != "" {
-		historyFile = filepath.Join(dataDir, "thop", "history")
-	} else if home, err := os.UserHomeDir(); err == nil {
-		historyFile = filepath.Join(home, ".local", "share", "thop", "history")
+	// Ensure history directory exists
+	historyDir := getHistoryDir()
+	if historyDir != "" {
+		os.MkdirAll(historyDir, 0700)
 	}
 
-	// Ensure history directory exists
-	if historyFile != "" {
-		os.MkdirAll(filepath.Dir(historyFile), 0700)
-	}
+	// Get history file for initial session
+	initialSession := a.sessions.GetActiveSessionName()
+	historyFile := getHistoryFile(initialSession)
 
 	// Create completer for slash commands
 	completer := readline.NewPrefixCompleter(
@@ -87,7 +118,13 @@ func (a *App) runInteractive() error {
 		// Fall back to simple mode if readline fails
 		return a.runInteractiveSimple()
 	}
-	defer rl.Close()
+	defer func() {
+		rl.Close()
+		a.rl = nil
+	}()
+
+	// Store readline instance for session switching
+	a.rl = rl
 
 	if !a.quiet {
 		fmt.Println("thop - Terminal Hopper for Agents")
@@ -446,7 +483,11 @@ func (a *App) cmdConnect(name string) error {
 	if sess.IsConnected() {
 		fmt.Printf("Session '%s' is already connected\n", name)
 		// Even if already connected, switch to it
-		return a.sessions.SetActiveSession(name)
+		if err := a.sessions.SetActiveSession(name); err != nil {
+			return err
+		}
+		a.switchHistory(name)
+		return nil
 	}
 
 	fmt.Printf("Connecting to %s...\n", name)
@@ -460,6 +501,7 @@ func (a *App) cmdConnect(name string) error {
 	if err := a.sessions.SetActiveSession(name); err != nil {
 		return err
 	}
+	a.switchHistory(name)
 	fmt.Printf("Switched to %s\n", name)
 
 	return nil
@@ -489,6 +531,9 @@ func (a *App) cmdSwitch(name string) error {
 	if err := a.sessions.SetActiveSession(name); err != nil {
 		return err
 	}
+
+	// Switch to session's command history
+	a.switchHistory(name)
 
 	if !a.quiet {
 		fmt.Printf("Switched to %s\n", name)
