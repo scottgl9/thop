@@ -37,10 +37,16 @@ The MCP server exposes a streamlined set of tools for AI agents:
 - **execute** - Execute a command in the active session
   - `command` (string, required): Command to execute
   - `session` (string, optional): Specific session to execute in
-  - `timeout` (integer, optional): Command timeout in seconds (default: 300, ignored if background is true)
+  - `timeout` (integer, optional): Command timeout in seconds (default: session/global config or 300s)
   - `background` (boolean, optional): Run command in background (default: false, not yet implemented)
 
   This is the primary tool for interacting with sessions. Use it to run any command including file operations (`cat`, `ls`, `echo`, etc.), environment management (`export`, `env`), directory navigation (`cd`, `pwd`), and more.
+
+  **Timeout Behavior**: The timeout is determined in this order:
+  1. Explicit `timeout` parameter (if provided)
+  2. Session-specific `command_timeout` in config
+  3. Global `command_timeout` setting
+  4. Default 300 seconds (5 minutes)
 
 ### Design Philosophy
 
@@ -71,6 +77,39 @@ execute: "export VAR=value"
 # Check current directory
 execute: "pwd"
 ```
+
+## Configuration
+
+### Timeout Configuration
+
+You can configure command timeouts at three levels:
+
+**Global Default** (`~/.config/thop/config.toml`):
+```toml
+[settings]
+command_timeout = 300  # Default for all sessions
+```
+
+**Per-Session Override**:
+```toml
+[sessions.slow-server]
+type = "ssh"
+host = "slow.example.com"
+command_timeout = 600  # Higher timeout for slow server
+```
+
+**Per-Command Override** (via MCP execute tool):
+```json
+{
+  "name": "execute",
+  "arguments": {
+    "command": "npm run build",
+    "timeout": 900
+  }
+}
+```
+
+Priority order: command parameter > session config > global setting > default (300s)
 
 ## Available Resources
 
@@ -156,7 +195,11 @@ Response:
 
 ## Error Handling
 
-The MCP server returns structured errors following the JSON-RPC 2.0 specification:
+The MCP server uses structured error codes for programmatic error handling.
+
+### JSON-RPC Errors
+
+Protocol-level errors follow JSON-RPC 2.0 specification:
 
 ```json
 {
@@ -170,7 +213,9 @@ The MCP server returns structured errors following the JSON-RPC 2.0 specificatio
 }
 ```
 
-Tool errors are returned as successful responses with `isError: true`:
+### Tool Errors
+
+Tool errors are returned as successful responses with `isError: true` and include structured error codes:
 
 ```json
 {
@@ -180,11 +225,66 @@ Tool errors are returned as successful responses with `isError: true`:
     "content": [
       {
         "type": "text",
-        "text": "Session not found: invalid-session"
+        "text": "[SESSION_NOT_FOUND] Session 'invalid-session' not found\n\nSuggestion: Use /status to see available sessions or /add-session to create a new one\n\nSession: invalid-session"
       }
     ],
     "isError": true
   }
+}
+```
+
+### Error Codes
+
+#### Session Errors
+- `SESSION_NOT_FOUND` - Session does not exist
+- `SESSION_NOT_CONNECTED` - Session exists but is not connected
+- `SESSION_ALREADY_EXISTS` - Attempting to create duplicate session
+- `NO_ACTIVE_SESSION` - No session is currently active
+- `CANNOT_CLOSE_LOCAL` - Cannot close the local session
+
+#### Connection Errors
+- `CONNECTION_FAILED` - Generic connection failure
+- `AUTH_FAILED` - Authentication failed (generic)
+- `AUTH_KEY_FAILED` - SSH key authentication failed
+- `AUTH_PASSWORD_FAILED` - Password authentication failed
+- `HOST_KEY_UNKNOWN` - Host key not in known_hosts
+- `HOST_KEY_MISMATCH` - Host key mismatch (security)
+- `CONNECTION_TIMEOUT` - Connection attempt timed out
+- `CONNECTION_REFUSED` - Connection refused by host
+
+#### Command Execution Errors
+- `COMMAND_FAILED` - Command execution failed
+- `COMMAND_TIMEOUT` - Command execution timed out
+- `COMMAND_NOT_FOUND` - Command not found in PATH
+- `PERMISSION_DENIED` - Insufficient permissions
+
+#### Parameter Errors
+- `INVALID_PARAMETER` - Parameter has invalid value
+- `MISSING_PARAMETER` - Required parameter not provided
+
+#### Feature Errors
+- `NOT_IMPLEMENTED` - Feature not yet implemented
+- `OPERATION_FAILED` - Generic operation failure
+
+### Error Response Format
+
+All tool errors include:
+- **Error Code**: Structured code for programmatic handling
+- **Message**: Human-readable error description
+- **Session**: Session name (if applicable)
+- **Suggestion**: Actionable suggestion for resolving the error
+
+Example error with all fields:
+
+```json
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "[AUTH_KEY_FAILED] SSH key authentication failed\n\nSuggestion: Use /auth to provide a password or check your SSH key configuration\n\nSession: prod"
+    }
+  ],
+  "isError": true
 }
 ```
 
