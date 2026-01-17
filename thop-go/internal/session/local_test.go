@@ -154,18 +154,21 @@ func TestLocalSessionCD(t *testing.T) {
 		t.Errorf("cd should succeed, got exit code %d", result.ExitCode)
 	}
 
-	if session.GetCWD() != "/tmp" {
-		t.Errorf("expected CWD '/tmp', got '%s'", session.GetCWD())
+	// On macOS, /tmp is a symlink to /private/tmp, so accept either
+	cwd := session.GetCWD()
+	if cwd != "/tmp" && cwd != "/private/tmp" {
+		t.Errorf("expected CWD '/tmp' or '/private/tmp', got '%s'", cwd)
 	}
 
-	// Subsequent commands should run in /tmp
+	// Subsequent commands should run in /tmp (or /private/tmp on macOS)
 	result, err = session.Execute("pwd")
 	if err != nil {
 		t.Fatalf("Execute pwd failed: %v", err)
 	}
 
-	if strings.TrimSpace(result.Stdout) != "/tmp" {
-		t.Errorf("expected pwd '/tmp', got '%s'", result.Stdout)
+	pwdOutput := strings.TrimSpace(result.Stdout)
+	if pwdOutput != "/tmp" && pwdOutput != "/private/tmp" {
+		t.Errorf("expected pwd '/tmp' or '/private/tmp', got '%s'", pwdOutput)
 	}
 
 	// cd to home
@@ -247,8 +250,10 @@ func TestLocalSessionSetCWD(t *testing.T) {
 		t.Errorf("SetCWD should succeed for /tmp: %v", err)
 	}
 
-	if session.GetCWD() != "/tmp" {
-		t.Errorf("expected CWD '/tmp', got '%s'", session.GetCWD())
+	// On macOS, /tmp is a symlink to /private/tmp, so accept either
+	cwd := session.GetCWD()
+	if cwd != "/tmp" && cwd != "/private/tmp" {
+		t.Errorf("expected CWD '/tmp' or '/private/tmp', got '%s'", cwd)
 	}
 
 	// Invalid directory

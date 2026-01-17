@@ -98,10 +98,22 @@ deps:
 tidy:
 	$(GOMOD) tidy
 
-# Install binary to GOPATH/bin
+# Install directory (can be overridden: make install PREFIX=/usr)
+PREFIX?=/usr/local
+BINDIR?=$(PREFIX)/bin
+
+# Install binary to /usr/local/bin (or custom PREFIX)
 .PHONY: install
-install:
-	$(GOCMD) install $(LDFLAGS) $(MAIN_PKG)
+install: release
+	@echo "Installing $(BINARY_NAME) to $(BINDIR)"
+	install -d $(BINDIR)
+	install -m 755 $(BUILD_DIR)/$(BINARY_NAME) $(BINDIR)/$(BINARY_NAME)
+
+# Uninstall binary
+.PHONY: uninstall
+uninstall:
+	@echo "Removing $(BINARY_NAME) from $(BINDIR)"
+	rm -f $(BINDIR)/$(BINARY_NAME)
 
 # Cross-compilation targets
 .PHONY: build-linux
@@ -153,7 +165,8 @@ help:
 	@echo "  clean        Clean build artifacts"
 	@echo "  deps         Download dependencies"
 	@echo "  tidy         Tidy dependencies"
-	@echo "  install      Install binary to GOPATH/bin"
+	@echo "  install      Install binary to /usr/local/bin (PREFIX=/usr/local)"
+	@echo "  uninstall    Remove binary from /usr/local/bin"
 	@echo "  build-linux  Build for Linux amd64"
 	@echo "  build-darwin Build for macOS (amd64 and arm64)"
 	@echo "  build-all    Build for all platforms"

@@ -2,6 +2,18 @@
 
 A lightweight CLI tool that enables AI agents to execute commands across local and remote (SSH) sessions with seamless context switching.
 
+## Platform Support
+
+| Platform | Architecture | Status |
+|----------|--------------|--------|
+| Linux | x86_64 (amd64) | ✅ Fully Supported |
+| Linux | arm64 | ✅ Fully Supported |
+| macOS | x86_64 (Intel) | ✅ Fully Supported |
+| macOS | arm64 (Apple Silicon) | ✅ Fully Supported |
+| Windows | - | ❌ Not Supported |
+
+Both the Go and Rust implementations are tested on Linux and macOS via CI.
+
 ## Features
 
 - **Multi-session support**: Manage multiple SSH connections alongside your local shell

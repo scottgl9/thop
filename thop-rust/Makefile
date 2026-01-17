@@ -3,7 +3,11 @@
 BINARY_NAME=thop
 BUILD_DIR=target
 
-.PHONY: all build release test clean fmt clippy check install
+# Install directory (can be overridden: make install PREFIX=/usr)
+PREFIX?=/usr/local
+BINDIR?=$(PREFIX)/bin
+
+.PHONY: all build release test clean fmt clippy check install uninstall build-linux build-darwin build-all
 
 all: build
 
@@ -17,6 +21,18 @@ release:
 	cargo build --release
 	@echo "Binary built: $(BUILD_DIR)/release/$(BINARY_NAME)"
 	@ls -lh $(BUILD_DIR)/release/$(BINARY_NAME)
+
+# Cross-compilation targets
+build-linux:
+	cargo build --release --target x86_64-unknown-linux-gnu
+	@echo "Binary built: $(BUILD_DIR)/x86_64-unknown-linux-gnu/release/$(BINARY_NAME)"
+
+build-darwin:
+	cargo build --release --target x86_64-apple-darwin
+	cargo build --release --target aarch64-apple-darwin
+	@echo "Binaries built for macOS (Intel and Apple Silicon)"
+
+build-all: build-linux build-darwin
 
 # Run tests
 test:
@@ -46,9 +62,16 @@ check:
 clean:
 	cargo clean
 
-# Install to ~/.cargo/bin
+# Install binary to /usr/local/bin (or custom PREFIX)
 install: release
-	cargo install --path .
+	@echo "Installing $(BINARY_NAME) to $(BINDIR)"
+	install -d $(BINDIR)
+	install -m 755 $(BUILD_DIR)/release/$(BINARY_NAME) $(BINDIR)/$(BINARY_NAME)
+
+# Uninstall binary
+uninstall:
+	@echo "Removing $(BINARY_NAME) from $(BINDIR)"
+	rm -f $(BINDIR)/$(BINARY_NAME)
 
 # Run in debug mode
 run:
@@ -91,10 +114,14 @@ help:
 	@echo "  clippy       - Run clippy lints"
 	@echo "  check        - Check code compilation"
 	@echo "  clean        - Remove build artifacts"
-	@echo "  install      - Install to ~/.cargo/bin"
+	@echo "  install      - Install to /usr/local/bin (PREFIX=/usr/local)"
+	@echo "  uninstall    - Remove from /usr/local/bin"
 	@echo "  run          - Run in debug mode"
 	@echo "  run-proxy    - Run in proxy mode"
 	@echo "  run-status   - Run status command"
 	@echo "  doc          - Build and open documentation"
 	@echo "  update       - Update dependencies"
 	@echo "  size         - Show binary size"
+	@echo "  build-linux  - Build for Linux x86_64"
+	@echo "  build-darwin - Build for macOS (Intel and Apple Silicon)"
+	@echo "  build-all    - Build for all platforms"
