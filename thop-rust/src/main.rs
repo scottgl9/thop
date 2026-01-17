@@ -1,7 +1,10 @@
 mod cli;
 mod config;
 mod error;
+mod logger;
+mod mcp;
 mod session;
+mod sshconfig;
 mod state;
 
 use std::process::ExitCode;
