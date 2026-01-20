@@ -81,6 +81,7 @@ const (
 	ErrHostKeyChanged       = "HOST_KEY_CHANGED"
 	ErrCommandTimeout       = "COMMAND_TIMEOUT"
 	ErrCommandInterrupted   = "COMMAND_INTERRUPTED"
+	ErrCommandRestricted    = "COMMAND_RESTRICTED"
 	ErrSessionNotFound      = "SESSION_NOT_FOUND"
 	ErrSessionDisconnected  = "SESSION_DISCONNECTED"
 )

@@ -20,6 +20,8 @@ pub enum ErrorCode {
     HostKeyChanged,
     #[serde(rename = "COMMAND_TIMEOUT")]
     CommandTimeout,
+    #[serde(rename = "COMMAND_RESTRICTED")]
+    CommandRestricted,
     #[serde(rename = "SESSION_NOT_FOUND")]
     SessionNotFound,
     #[serde(rename = "SESSION_DISCONNECTED")]
@@ -125,6 +127,17 @@ impl SessionError {
         )
         .with_host(host)
         .with_suggestion("Add the host to known_hosts: ssh-keyscan <host> >> ~/.ssh/known_hosts")
+    }
+
+    pub fn command_restricted(command: &str, category: &str) -> Self {
+        Self {
+            code: ErrorCode::CommandRestricted,
+            message: format!("{}: '{}' is not allowed in restricted mode", category, command),
+            session: None,
+            host: None,
+            retryable: false,
+            suggestion: Some("Remove --restricted flag to allow this command, or use a different approach".to_string()),
+        }
     }
 }
 

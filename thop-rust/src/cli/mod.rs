@@ -59,6 +59,10 @@ pub struct Args {
     #[arg(long)]
     pub mcp: bool,
 
+    /// Block dangerous/destructive commands (for AI agents)
+    #[arg(long)]
+    pub restricted: bool,
+
     /// Execute command and exit
     #[arg(short = 'c', value_name = "COMMAND")]
     pub command: Option<String>,
@@ -136,6 +140,13 @@ impl App {
 
         // Initialize session manager
         let sessions = SessionManager::new(&config, Some(StateManager::new(&config.settings.state_file)));
+        
+        // Enable restricted mode if requested
+        if args.restricted {
+            sessions.set_restricted_mode(true);
+            logger::info("Restricted mode enabled - dangerous commands will be blocked");
+        }
+        
         logger::debug(&format!("Loaded {} sessions", sessions.session_names().len()));
 
         Ok(Self {
@@ -359,6 +370,7 @@ USAGE:
 OPTIONS:
     --proxy           Run in proxy mode (SHELL compatible)
     --mcp             Run as MCP (Model Context Protocol) server
+    --restricted      Block dangerous/destructive commands (for AI agents)
     -c <command>      Execute command and exit with its exit code
     --status          Show all sessions and exit
     -C, --config <path> Use alternate config file
@@ -368,6 +380,21 @@ OPTIONS:
     -q, --quiet       Suppress non-error output
     -h, --help        Print help information
     -V, --version     Print version
+
+RESTRICTED MODE:
+    When --restricted is enabled, the following command categories are blocked:
+    
+    Privilege Escalation:
+      sudo, su, doas, pkexec
+    
+    Destructive File Operations:
+      rm, rmdir, shred, wipe, srm, unlink, dd, truncate (to 0)
+    
+    System Modifications:
+      chmod, chown, chgrp, chattr, mkfs, fdisk, parted, mount, umount,
+      shutdown, reboot, poweroff, halt, useradd, userdel, usermod,
+      groupadd, groupdel, passwd, systemctl, service, insmod, rmmod,
+      modprobe, setenforce, aa-enforce, aa-complain
 
 INTERACTIVE MODE COMMANDS:
     /connect <session>  Establish SSH connection
@@ -385,8 +412,8 @@ EXAMPLES:
     # Execute single command
     thop -c "ls -la"
 
-    # Use as shell for AI agent
-    SHELL="thop --proxy" claude
+    # Use as shell for AI agent with safety restrictions
+    SHELL="thop --proxy --restricted" claude
 
     # Run as MCP server
     thop --mcp
@@ -407,7 +434,7 @@ _thop() {
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
     # Main options
-    opts="--proxy --mcp --status --config --json -v --verbose -q --quiet -h --help -V --version -c --completions"
+    opts="--proxy --mcp --restricted --status --config --json -v --verbose -q --quiet -h --help -V --version -c --completions"
 
     # Handle specific options
     case "${prev}" in
@@ -447,6 +474,7 @@ _thop() {
     opts=(
         '--proxy[Run in proxy mode for AI agents]'
         '--mcp[Run as MCP (Model Context Protocol) server]'
+        '--restricted[Block dangerous/destructive commands for AI agents]'
         '-c[Execute command and exit]:command:'
         '--status[Show status and exit]'
         '-C[Use alternate config file]:config file:_files'
@@ -476,6 +504,7 @@ fn generate_fish_completion() -> &'static str {
 # Main options
 complete -c thop -l proxy -d 'Run in proxy mode for AI agents'
 complete -c thop -l mcp -d 'Run as MCP (Model Context Protocol) server'
+complete -c thop -l restricted -d 'Block dangerous/destructive commands for AI agents'
 complete -c thop -s c -r -d 'Execute command and exit'
 complete -c thop -l status -d 'Show status and exit'
 complete -c thop -s C -l config -r -F -d 'Use alternate config file'

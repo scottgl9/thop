@@ -158,6 +158,7 @@ After language selection, implement full MVP in chosen language.
 - [x] Shell completions for bash
 - [x] Shell completions for zsh
 - [x] Shell completions for fish
+- [x] `--restricted` flag to block dangerous commands for AI agents
 
 ---
 

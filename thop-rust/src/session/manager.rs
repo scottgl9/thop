@@ -4,6 +4,7 @@ use serde::Serialize;
 
 use crate::config::Config;
 use crate::error::{Result, SessionError};
+use crate::restriction::Checker as RestrictionChecker;
 use crate::sshconfig::SshConfigParser;
 use crate::state::Manager as StateManager;
 use super::{ExecuteResult, LocalSession, Session, SshConfig, SshSession};
@@ -28,6 +29,7 @@ pub struct Manager {
     sessions: HashMap<String, Box<dyn Session>>,
     active_session: String,
     state_manager: Option<StateManager>,
+    restriction_checker: RestrictionChecker,
 }
 
 impl Manager {
@@ -85,12 +87,23 @@ impl Manager {
             sessions,
             active_session,
             state_manager,
+            restriction_checker: RestrictionChecker::new(),
         }
     }
 
     /// Check if a session exists
     pub fn has_session(&self, name: &str) -> bool {
         self.sessions.contains_key(name)
+    }
+
+    /// Enable or disable restricted mode
+    pub fn set_restricted_mode(&self, enabled: bool) {
+        self.restriction_checker.set_enabled(enabled);
+    }
+
+    /// Check if restricted mode is enabled
+    pub fn is_restricted_mode(&self) -> bool {
+        self.restriction_checker.is_enabled()
     }
 
     /// Get a session by name
@@ -131,6 +144,16 @@ impl Manager {
 
     /// Execute a command on the active session
     pub fn execute(&mut self, cmd: &str) -> Result<ExecuteResult> {
+        // Check for restricted commands first
+        let check_result = self.restriction_checker.check(cmd);
+        if !check_result.allowed {
+            let command = check_result.command().unwrap_or("unknown");
+            let category = check_result.category()
+                .map(|c| c.description())
+                .unwrap_or("Restricted operation");
+            return Err(SessionError::command_restricted(command, category).into());
+        }
+
         let session = self.sessions.get_mut(&self.active_session).ok_or_else(|| {
             SessionError::session_not_found(&self.active_session)
         })?;
@@ -140,6 +163,16 @@ impl Manager {
 
     /// Execute a command on a specific session
     pub fn execute_on(&mut self, name: &str, cmd: &str) -> Result<ExecuteResult> {
+        // Check for restricted commands first
+        let check_result = self.restriction_checker.check(cmd);
+        if !check_result.allowed {
+            let command = check_result.command().unwrap_or("unknown");
+            let category = check_result.category()
+                .map(|c| c.description())
+                .unwrap_or("Restricted operation");
+            return Err(SessionError::command_restricted(command, category).into());
+        }
+
         let session = self.sessions.get_mut(name).ok_or_else(|| {
             SessionError::session_not_found(name)
         })?;

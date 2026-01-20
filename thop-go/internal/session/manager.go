@@ -9,6 +9,7 @@ import (
 
 	"github.com/scottgl9/thop/internal/config"
 	"github.com/scottgl9/thop/internal/logger"
+	"github.com/scottgl9/thop/internal/restriction"
 	"github.com/scottgl9/thop/internal/sshconfig"
 	"github.com/scottgl9/thop/internal/state"
 )
@@ -20,6 +21,7 @@ type Manager struct {
 	config            *config.Config
 	state             *state.Manager
 	sshConfig         *sshconfig.Config
+	restriction       *restriction.Checker
 	commandTimeout    time.Duration
 	reconnectAttempts int
 	reconnectBackoff  time.Duration
@@ -54,6 +56,7 @@ func NewManager(cfg *config.Config, stateMgr *state.Manager) *Manager {
 		config:            cfg,
 		state:             stateMgr,
 		sshConfig:         sshCfg,
+		restriction:       restriction.NewChecker(),
 		commandTimeout:    timeout,
 		reconnectAttempts: reconnectAttempts,
 		reconnectBackoff:  reconnectBackoff,
@@ -305,6 +308,16 @@ func (m *Manager) Execute(cmd string) (*ExecuteResult, error) {
 
 // ExecuteWithContext executes a command on the active session with cancellation support
 func (m *Manager) ExecuteWithContext(ctx context.Context, cmd string) (*ExecuteResult, error) {
+	// Check for restricted commands first
+	if allowed, rule := m.restriction.Check(cmd); !allowed {
+		logger.Warn("command blocked by restriction: %s (rule: %s)", cmd, rule.Command)
+		return nil, &Error{
+			Code:       ErrCommandRestricted,
+			Message:    fmt.Sprintf("%s: '%s' is not allowed in restricted mode", restriction.CategoryDescription(rule.Category), rule.Command),
+			Suggestion: "Remove --restricted flag to allow this command, or use a different approach",
+		}
+	}
+
 	session := m.GetActiveSession()
 	if session == nil {
 		logger.Warn("execute failed: no active session")
@@ -427,6 +440,16 @@ func (m *Manager) SetSessionEnv(key, value string) error {
 
 // ExecuteOn executes a command on a specific session
 func (m *Manager) ExecuteOn(sessionName, cmd string) (*ExecuteResult, error) {
+	// Check for restricted commands first
+	if allowed, rule := m.restriction.Check(cmd); !allowed {
+		logger.Warn("command blocked by restriction: %s (rule: %s)", cmd, rule.Command)
+		return nil, &Error{
+			Code:       ErrCommandRestricted,
+			Message:    fmt.Sprintf("%s: '%s' is not allowed in restricted mode", restriction.CategoryDescription(rule.Category), rule.Command),
+			Suggestion: "Remove --restricted flag to allow this command, or use a different approach",
+		}
+	}
+
 	session, ok := m.GetSession(sessionName)
 	if !ok {
 		return nil, &Error{
@@ -441,6 +464,16 @@ func (m *Manager) ExecuteOn(sessionName, cmd string) (*ExecuteResult, error) {
 
 // ExecuteInteractive executes a command on the active session with PTY support
 func (m *Manager) ExecuteInteractive(cmd string) (int, error) {
+	// Check for restricted commands first
+	if allowed, rule := m.restriction.Check(cmd); !allowed {
+		logger.Warn("command blocked by restriction: %s (rule: %s)", cmd, rule.Command)
+		return 1, &Error{
+			Code:       ErrCommandRestricted,
+			Message:    fmt.Sprintf("%s: '%s' is not allowed in restricted mode", restriction.CategoryDescription(rule.Category), rule.Command),
+			Suggestion: "Remove --restricted flag to allow this command, or use a different approach",
+		}
+	}
+
 	session := m.GetActiveSession()
 	if session == nil {
 		logger.Warn("execute interactive failed: no active session")
@@ -545,4 +578,17 @@ func (m *Manager) AddSession(name string, cfg config.Session) error {
 // GetConfig returns the current configuration
 func (m *Manager) GetConfig() *config.Config {
 	return m.config
+}
+
+// SetRestrictedMode enables or disables restricted mode for command execution
+func (m *Manager) SetRestrictedMode(enabled bool) {
+	m.restriction.SetEnabled(enabled)
+	if enabled {
+		logger.Info("restricted mode enabled - dangerous commands will be blocked")
+	}
+}
+
+// IsRestrictedMode returns whether restricted mode is enabled
+func (m *Manager) IsRestrictedMode() bool {
+	return m.restriction.IsEnabled()
 }
