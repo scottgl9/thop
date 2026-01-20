@@ -34,25 +34,26 @@ type App struct {
 	GitCommit string
 	BuildTime string
 
-	config       *config.Config
-	state        *state.Manager
-	sessions     *session.Manager
-	configPath   string
-	proxyMode    bool
-	proxyCommand string // Command to execute in proxy mode (-c flag)
-	mcpMode      bool   // Run as MCP server
-	jsonOutput   bool
-	showStatus   bool
-	completions  string // Shell name for completions
-	verbose      bool
-	quiet        bool
+	config         *config.Config
+	state          *state.Manager
+	sessions       *session.Manager
+	configPath     string
+	proxyMode      bool
+	proxyCommand   string // Command to execute in proxy mode (-c flag)
+	mcpMode        bool   // Run as MCP server
+	restrictedMode bool   // Restrict dangerous/destructive operations for AI agents
+	jsonOutput     bool
+	showStatus     bool
+	completions    string // Shell name for completions
+	verbose        bool
+	quiet          bool
 
 	// readline instance for interactive mode (nil when not in interactive mode)
 	rl *readline.Instance
 
 	// Background job tracking
-	bgJobs   map[int]*BackgroundJob
-	bgJobsMu sync.RWMutex
+	bgJobs    map[int]*BackgroundJob
+	bgJobsMu  sync.RWMutex
 	nextJobID int
 }
 
@@ -120,7 +121,8 @@ func (a *App) Run(args []string) error {
 
 	// Initialize session manager
 	a.sessions = session.NewManager(cfg, a.state)
-	logger.Debug("session manager initialized with %d sessions", len(cfg.Sessions))
+	a.sessions.SetRestrictedMode(a.restrictedMode)
+	logger.Debug("session manager initialized with %d sessions, restricted=%v", len(cfg.Sessions), a.restrictedMode)
 
 	// Handle special flags
 	if a.showStatus {
@@ -146,6 +148,7 @@ func (a *App) parseFlags(args []string) error {
 
 	flags.BoolVar(&a.proxyMode, "proxy", false, "Run in proxy mode (for AI agents)")
 	flags.BoolVar(&a.mcpMode, "mcp", false, "Run as MCP server")
+	flags.BoolVar(&a.restrictedMode, "restricted", false, "Restrict dangerous/destructive operations (for AI agents)")
 	flags.StringVar(&a.proxyCommand, "c", "", "Execute command (for shell compatibility)")
 	flags.BoolVar(&a.showStatus, "status", false, "Show status and exit")
 	flags.StringVar(&a.configPath, "config", "", "Path to config file")
@@ -210,6 +213,7 @@ USAGE:
 OPTIONS:
     --proxy           Run in proxy mode (SHELL compatible)
     --mcp             Run as MCP (Model Context Protocol) server
+    --restricted      Block dangerous/destructive commands (for AI agents)
     -c <command>      Execute command and exit with its exit code
     --status          Show all sessions and exit
     --config <path>   Use alternate config file
@@ -219,6 +223,21 @@ OPTIONS:
     -q, --quiet       Suppress non-error output
     -h, --help        Print help information
     -V, --version     Print version
+
+RESTRICTED MODE:
+    When --restricted is enabled, the following command categories are blocked:
+    
+    Privilege Escalation:
+      sudo, su, doas, pkexec
+    
+    Destructive File Operations:
+      rm, rmdir, shred, wipe, srm, unlink, dd, truncate (to 0)
+    
+    System Modifications:
+      chmod, chown, chgrp, chattr, mkfs, fdisk, parted, mount, umount,
+      shutdown, reboot, poweroff, halt, useradd, userdel, usermod,
+      groupadd, groupdel, passwd, systemctl, service, insmod, rmmod,
+      modprobe, setenforce, aa-enforce, aa-complain
 
 INTERACTIVE MODE COMMANDS:
     /connect <session>  Establish SSH connection
@@ -241,8 +260,8 @@ EXAMPLES:
     # Execute single command
     thop -c "ls -la"
 
-    # Use as shell for AI agent
-    SHELL="thop --proxy" claude
+    # Use as shell for AI agent with safety restrictions
+    SHELL="thop --proxy --restricted" claude
 
     # Check status
     thop --status

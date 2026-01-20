@@ -25,6 +25,9 @@ dirs = "5.0.1"
 thiserror = "1.0.56"
 anyhow = "1.0.79"
 
+# Regex for command restriction patterns
+regex = "1.10"
+
 # System
 libc = "0.2.152"
 

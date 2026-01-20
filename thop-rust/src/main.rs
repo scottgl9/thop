@@ -3,6 +3,7 @@ mod config;
 mod error;
 mod logger;
 mod mcp;
+mod restriction;
 mod session;
 mod sshconfig;
 mod state;
