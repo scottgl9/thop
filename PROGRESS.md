@@ -1,7 +1,7 @@
 # thop Implementation Progress
 
 **Architecture**: Shell Wrapper (v0.2.0)
-**Languages**: Go (primary), Rust (maintained)
+**Language**: Go
 
 ## Overview
 
@@ -21,126 +21,11 @@
 
 ## Phase 0: Language Evaluation ✅
 
-### Go Prototype (`thop-go/`) - COMPLETE
+### Go Prototype - COMPLETE
 
 **Binary Size**: 4.8MB (release), 7.2MB (debug)
 **Build Time**: Fast (~2s)
 **Tests**: 105 passing
-
-#### Project Setup
-| Task | Status | Notes |
-|------|--------|-------|
-| Initialize Go module | Complete | github.com/scottgl9/thop |
-| Add dependencies | Complete | go-toml/v2, x/crypto/ssh |
-| Create project structure | Complete | cmd/, internal/, configs/ |
-
-#### Interactive Mode
-| Task | Status | Notes |
-|------|--------|-------|
-| Main loop with prompt | Complete | (session) $ prompt |
-| Slash command parsing | Complete | /connect, /switch, /status, etc. |
-| Output display | Complete | stdout/stderr handling |
-
-#### Local Shell
-| Task | Status | Notes |
-|------|--------|-------|
-| Command execution | Complete | Via shell subprocess |
-| Capture stdout/stderr | Complete | bytes.Buffer capture |
-| Exit code handling | Complete | ExitError handling |
-
-#### SSH Session
-| Task | Status | Notes |
-|------|--------|-------|
-| SSH connection | Complete | golang.org/x/crypto/ssh |
-| Command execution | Complete | Per-command sessions |
-| Key authentication | Complete | Agent + key files |
-| Auth error handling | Complete | Structured errors |
-
-#### Slash Commands
-| Task | Status | Notes |
-|------|--------|-------|
-| `/connect` | Complete | With connection feedback |
-| `/switch` | Complete | Auto-connects SSH sessions |
-| `/local` | Complete | Alias for /switch local |
-| `/status` | Complete | JSON and text output |
-| `/help` | Complete | Full command list |
-
-#### Proxy Mode
-| Task | Status | Notes |
-|------|--------|-------|
-| `--proxy` flag | Complete | SHELL compatible |
-| Stdin reading | Complete | Line-by-line |
-| Session routing | Complete | To active session |
-| Output handling | Complete | Passthrough |
-
-#### Configuration
-| Task | Status | Notes |
-|------|--------|-------|
-| TOML parsing | Complete | go-toml/v2 |
-| Session loading | Complete | Local + SSH sessions |
-
----
-
-### Rust Prototype (`thop-rust/`) - COMPLETE
-
-**Binary Size**: 1.4MB (release)
-**Build Time**: Fast (~24s for release)
-**Tests**: 32 passing
-
-#### Project Setup
-| Task | Status | Notes |
-|------|--------|-------|
-| Initialize Cargo project | Complete | Cargo.toml |
-| Add dependencies | Complete | clap, toml, serde, ssh2, chrono, regex |
-| Create project structure | Complete | src/{cli,config,session,state,restriction}/ |
-
-#### Interactive Mode
-| Task | Status | Notes |
-|------|--------|-------|
-| Main loop with prompt | Complete | (session) $ prompt |
-| Slash command parsing | Complete | /connect, /switch, /status, etc. |
-| Output display | Complete | stdout/stderr handling |
-
-#### Local Shell
-| Task | Status | Notes |
-|------|--------|-------|
-| Command execution | Complete | Via shell subprocess |
-| Capture stdout/stderr | Complete | String capture |
-| Exit code handling | Complete | ExitStatus handling |
-
-#### SSH Session
-| Task | Status | Notes |
-|------|--------|-------|
-| SSH connection | Complete | ssh2 crate |
-| Command execution | Complete | Per-command channels |
-| Key authentication | Complete | Agent + key files |
-| Auth error handling | Complete | Structured errors |
-
-#### Slash Commands
-| Task | Status | Notes |
-|------|--------|-------|
-| `/connect` | Complete | With connection feedback |
-| `/switch` | Complete | Auto-connects SSH sessions |
-| `/local` | Complete | Alias for /switch local |
-| `/status` | Complete | JSON and text output |
-| `/help` | Complete | Full command list |
-
-#### Proxy Mode
-| Task | Status | Notes |
-|------|--------|-------|
-| `--proxy` flag | Complete | SHELL compatible |
-| `--restricted` flag | Complete | Blocks dangerous commands |
-| Stdin reading | Complete | Line-by-line |
-| Session routing | Complete | To active session |
-| Output handling | Complete | Passthrough |
-
-#### Configuration
-| Task | Status | Notes |
-|------|--------|-------|
-| TOML parsing | Complete | toml crate |
-| Session loading | Complete | Local + SSH sessions |
-
----
 
 ### Evaluation ✅
 | Task | Status | Notes |
@@ -217,7 +102,7 @@
 
 | Category | Status | Notes |
 |----------|--------|-------|
-| Unit Tests | Complete | Go: 105 tests, Rust: 32 tests |
+| Unit Tests | Complete | 105 tests |
 | Integration Tests | Complete | Docker-based SSH tests |
 | E2E Tests | In Progress | Proxy mode testing needed |
 | Test Infrastructure | Complete | GitHub Actions CI |
@@ -228,8 +113,6 @@
 
 | Task | Status | Notes |
 |------|--------|-------|
-| PRD.md | Complete | v0.2.0 - Shell wrapper architecture |
-| RESEARCH.md | Complete | Architecture research and decisions |
 | TODO.md | Complete | Task list for all phases |
 | PROGRESS.md | Complete | This file |
 | CLAUDE.md | Complete | Development guide |
@@ -243,8 +126,8 @@
 
 ## Changelog
 
-### 2026-01-19 (latest)
-- Added `--restricted` mode to both Go and Rust implementations
+### 2026-01-19
+- Added `--restricted` mode to Go implementation
 - Blocks dangerous commands for AI agent safety:
   - Privilege escalation (sudo, su, doas)
   - Destructive file operations (rm, rmdir, shred, dd)
@@ -259,15 +142,14 @@
 
 ### 2026-01-16
 - Completed Go prototype with full test suite (105 tests)
-- Completed Rust prototype with full test suite (32 tests)
-- Both implementations working:
+- Go implementation working:
   - Interactive mode with slash commands
   - Proxy mode for AI agent integration
   - Local shell sessions
   - SSH sessions with key authentication
   - State persistence
   - TOML configuration
-- Binary sizes: Go 4.8MB, Rust 1.4MB
+- Binary size: Go 4.8MB
 - Added macOS cross-platform compatibility
 - Set up GitHub Actions CI with Codecov integration
 

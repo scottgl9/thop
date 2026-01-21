@@ -1,39 +1,18 @@
 # thop TODO List
 
-Tasks derived from PRD.md (v0.2.0 - Shell Wrapper Architecture).
 See PROGRESS.md for completion tracking.
 
 ---
 
 ## Phase 0: Language Evaluation ✅ COMPLETE
 
-Both Go and Rust prototypes implemented and tested.
-
-### Go Prototype (`thop-go/`) ✅
-- [x] Project setup with go.mod
-- [x] Interactive mode with prompt
-- [x] Local shell execution
-- [x] SSH session support
-- [x] Slash commands (/connect, /switch, /local, /status, /help)
-- [x] Proxy mode (--proxy)
-- [x] TOML configuration
-- [x] Unit tests (105 tests passing)
-
-### Rust Prototype (`thop-rust/`) ✅
-- [x] Project setup with Cargo
-- [x] Interactive mode with prompt
-- [x] Local shell execution
-- [x] SSH session support
-- [x] Slash commands
-- [x] Proxy mode
-- [x] TOML configuration
-- [x] Unit tests (32 tests passing)
+Go and Rust prototypes were implemented and tested. **Go was selected** for faster development and better SSH library support.
 
 ### Evaluation Results ✅
-- [x] Binary size: Go 4.8MB, Rust 1.4MB
-- [x] Both have similar code complexity
-- [x] Both have fast startup (<100ms)
-- [x] **Decision: Continue with Go** for faster development
+- Binary size: Go 4.8MB, Rust 1.4MB
+- Both have similar code complexity
+- Both have fast startup (<100ms)
+- **Decision: Continue with Go** for faster development
 
 ---
 

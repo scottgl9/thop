@@ -12,33 +12,25 @@ This document provides instructions for AI agents and automated tools contributi
 - State sharing between instances via file
 
 **Architecture**: Shell wrapper (no daemon)
-**Languages**: Evaluating Go and Rust in Phase 0
+**Language**: Go
 
 ## Repository Structure
 
 ```
 thop/
-├── PRD.md          # Product requirements (v0.2.0)
-├── RESEARCH.md     # Architecture research findings
 ├── TODO.md         # Task list by phase
 ├── PROGRESS.md     # Completion tracking
 ├── CLAUDE.md       # Claude Code-specific guide
 ├── AGENTS.md       # This file
-├── thop-go/        # Go prototype (Phase 0)
-│   ├── cmd/
-│   ├── internal/
-│   └── go.mod
-└── thop-rust/      # Rust prototype (Phase 0)
-    ├── src/
-    └── Cargo.toml
+├── cmd/            # Main entry point
+├── internal/       # Internal packages
+└── go.mod
 ```
 
 ## Key Documents
 
 | Document | Purpose |
 |----------|---------|
-| `PRD.md` | Complete requirements (v0.2.0 - shell wrapper) |
-| `RESEARCH.md` | Architecture decisions and language evaluation |
 | `TODO.md` | Actionable task list with phases |
 | `PROGRESS.md` | Implementation status tracking |
 
@@ -72,10 +64,8 @@ thop/
 
 ### Before Starting Work
 
-1. Read `PRD.md` for requirements context
-2. Check `TODO.md` for current phase tasks
-3. Review `PROGRESS.md` for status
-4. Identify which prototype (Go or Rust) to work on
+1. Check `TODO.md` for current phase tasks
+2. Review `PROGRESS.md` for status
 
 ### During Development
 
@@ -92,18 +82,10 @@ thop/
 
 ## Technical Stack
 
-### Go Prototype
 - **Language**: Go 1.21+
 - **SSH**: `golang.org/x/crypto/ssh`
 - **Config**: `github.com/pelletier/go-toml`
 - **State**: JSON file with file locking
-
-### Rust Prototype
-- **Language**: Rust 1.70+
-- **SSH**: `russh` crate
-- **Config**: `toml` crate
-- **Async**: `tokio`
-- **CLI**: `clap`
 
 ## Slash Commands
 
@@ -137,8 +119,7 @@ All errors must be:
 
 | Phase | Focus |
 |-------|-------|
-| **Phase 0** | Build prototypes in Go and Rust, evaluate |
-| **Phase 1** | Core MVP in chosen language |
+| **Phase 1** | Core MVP |
 | **Phase 2** | Robustness (reconnection, timeouts) |
 | **Phase 3** | Polish (SSH config, completions) |
 | **Phase 4** | Advanced (PTY, async) |
@@ -162,17 +143,10 @@ All errors must be:
 
 ## Code Quality Standards
 
-### Go
 - `gofmt` for formatting
 - `golint` for style
 - No `panic()` in production paths
 - Error wrapping with context
-
-### Rust
-- `rustfmt` for formatting
-- `clippy` for lints
-- No `unwrap()` in production paths
-- Proper error propagation with `?`
 
 ## Security Requirements
 
@@ -200,7 +174,5 @@ All errors must be:
 
 ## Getting Help
 
-- `PRD.md` Section 5: Functional Requirements
-- `PRD.md` Section 7: Technical Architecture
-- `PRD.md` Section 11: Error Handling
-- `RESEARCH.md`: Architecture decisions
+- `TODO.md`: Task list and requirements
+- `README.md`: User documentation
