@@ -12,7 +12,7 @@ A lightweight CLI tool that enables AI agents to execute commands across local a
 | macOS | arm64 (Apple Silicon) | ✅ Fully Supported |
 | Windows | - | ❌ Not Supported |
 
-Both the Go and Rust implementations are tested on Linux and macOS via CI.
+The Go implementation is tested on Linux and macOS via CI.
 
 ## Features
 
@@ -29,7 +29,6 @@ Both the Go and Rust implementations are tested on Linux and macOS via CI.
 ### From Source (Go)
 
 ```bash
-cd thop-go
 go build -o thop ./cmd/thop
 sudo mv thop /usr/local/bin/
 ```
@@ -435,21 +434,19 @@ State is preserved across thop restarts and uses file locking for safe concurren
 ### Building
 
 ```bash
-cd thop-go
 go build ./cmd/thop
 ```
 
 ### Testing
 
 ```bash
-cd thop-go
 go test ./...
 ```
 
 ### Project Structure
 
 ```
-thop-go/
+thop/
 ├── cmd/thop/          # Main entry point
 ├── internal/
 │   ├── cli/           # CLI handling (interactive, proxy, completions)

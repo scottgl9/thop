@@ -1,3 +1,21 @@
+# Binaries
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+coverage.out
+coverage.html
+
+# Dependency directories
+vendor/
+
 # IDE
 .idea/
 .vscode/
@@ -9,19 +27,15 @@
 .DS_Store
 Thumbs.db
 
-# Editor backups
-*.bak
-*.orig
+# Debug
+__debug_bin
 
-# Temporary files
-*.tmp
-*.temp
-
-# Debian package build outputs
+# Debian build artifacts
+debian/.debhelper/
+debian/debhelper-build-stamp
+debian/files
+debian/*.substvars
+debian/thop/
 *.deb
 *.buildinfo
 *.changes
-
-# Build outputs
-thop-go/thop
-thop-rust/target/

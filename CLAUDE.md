@@ -33,20 +33,14 @@
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Implementation Languages
+## Implementation Language
 
-We are evaluating both **Go** and **Rust**. Prototypes in both languages will be built in Phase 0.
+thop is implemented in **Go**.
 
 ### Go Stack
 - SSH: `golang.org/x/crypto/ssh`
 - Config: `github.com/pelletier/go-toml`
 - CLI: Standard library or `cobra`
-
-### Rust Stack
-- SSH: `russh`
-- Config: `toml`
-- CLI: `clap`
-- Async: `tokio`
 
 ## Key Components
 
@@ -105,7 +99,25 @@ user = "deploy"
 
 ## Project Structure
 
-### Go (`thop-go/`)
+```
+thop/
+├── cmd/thop/
+│   └── main.go
+├── internal/
+│   ├── cli/
+│   │   ├── interactive.go
+│   │   ├── proxy.go
+│   │   └── commands.go
+│   ├── session/
+│   │   ├── manager.go
+│   │   ├── local.go
+│   │   └── ssh.go
+│   ├── config/
+│   │   └── config.go
+│   └── state/
+│       └── state.go
+├── go.mod
+└── go.sum
 ```
 thop-go/
 ├── cmd/
@@ -153,16 +165,8 @@ thop-rust/
 
 ## Development Phases
 
-### Phase 0: Language Evaluation
-Build minimal prototypes in both Go and Rust:
-- Interactive mode with prompt
-- Local shell execution
-- Single SSH session
-- Basic slash commands
-- Proxy mode
-
 ### Phase 1: Core MVP
-Full implementation in chosen language:
+Full implementation:
 - Complete interactive and proxy modes
 - Multiple sessions
 - State management
@@ -209,7 +213,7 @@ Exit codes:
 ## Common Tasks
 
 ### Adding a Slash Command
-1. Add to command parser in `commands.go`/`commands.rs`
+1. Add to command parser in `commands.go`
 2. Implement handler function
 3. Update `/help` output
 4. Add tests
