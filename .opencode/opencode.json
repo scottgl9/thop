@@ -1,0 +1,10 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "rules": [
+    "You are working on the thop project - a terminal session manager for AI agents.",
+    "When running commands via the Bash tool, you may be inside thop itself.",
+    "Check for thop by running: echo $THOP_SESSION",
+    "If THOP_SESSION is set, you can use thop slash commands to switch between local and remote sessions.",
+    "The thop plugin (plugins/thop.ts) provides complete instructions when thop is detected."
+  ]
+}

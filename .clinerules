@@ -1,0 +1,224 @@
+# Claude Code Rules for thop
+
+## You are running inside thop!
+
+Check current session with:
+```bash
+echo $THOP_SESSION
+```
+
+This outputs your active session name (like `local`, `prod`, `dev`). You're working inside **thop**, a terminal session manager that lets you seamlessly work across local and remote SSH servers.
+
+## What You Can Do
+
+- Execute commands on local machine (when in `local` session)
+- Connect to and work on remote SSH servers
+- Switch between sessions instantly
+- Copy files between local and remote
+- Each session maintains its own working directory and environment
+
+## Essential Commands
+
+### Session Management
+```bash
+/status              # See all sessions, which is active (*), connection status
+/connect prod        # Connect to prod server (if configured)
+/switch dev          # Switch to dev server
+/local               # Switch back to local machine
+/close <session>     # Close SSH connection
+```
+
+### File Operations
+```bash
+/copy local:file.txt prod:/app/       # Copy from local to remote
+/copy prod:/etc/nginx.conf local:/    # Copy from remote to local
+/read /path/to/file                    # Read file from current session
+/write /path/to/file "content"        # Write to file in current session
+```
+
+### Environment & Jobs
+```bash
+/env                         # Show environment variables
+/env VAR=value              # Set environment variable (persists)
+/bg npm run build           # Run command in background
+/jobs                       # List background jobs
+/fg <job-id>                # Wait for job and show output
+/kill <job-id>              # Kill background job
+```
+
+### Interactive Commands
+```bash
+/shell vim config.yaml      # Run interactive command (vim, top, htop, etc.)
+```
+
+### Configuration
+```bash
+/add-session name host      # Add new SSH session dynamically
+/auth prod                  # Provide password for SSH (if key auth fails)
+/trust prod                 # Trust host key for SSH
+```
+
+## Workflow Guidelines
+
+### 1. Always Start with /status
+Before any work, check available sessions:
+```bash
+/status
+```
+
+### 2. Announce Session Switches
+When switching sessions, tell the user:
+```
+"Switching to production server..."
+/connect prod
+```
+
+### 3. Return to /local When Done
+Clean workflow pattern:
+```bash
+# Work on remote
+/connect prod
+# ... do stuff ...
+
+# Return to local
+/local
+```
+
+### 4. Use /copy Instead of scp
+```bash
+# ✅ Good - uses existing thop connection
+/copy local:app.js prod:/var/www/app/
+
+# ❌ Avoid - requires separate SSH connection
+scp app.js user@prod:/var/www/app/
+```
+
+### 5. Use /env Instead of export
+```bash
+# ✅ Good - persists in thop session state
+/env NODE_ENV=production
+
+# ❌ Avoid - not tracked by thop
+export NODE_ENV=production
+```
+
+### 6. Verify Before Destructive Commands
+Always check which session you're in before running destructive commands:
+```bash
+echo $THOP_SESSION  # Verify you're on the right server
+rm -rf /some/path   # Then proceed
+```
+
+## Example Workflows
+
+### Deploy to Production
+```bash
+# 1. Check sessions
+/status
+
+# 2. Connect to prod
+/connect prod
+
+# 3. Deploy
+cd /var/www/app
+git pull origin main
+npm install
+npm run build
+sudo systemctl restart app
+
+# 4. Verify
+curl http://localhost:8080/health
+
+# 5. Return to local
+/local
+```
+
+### Debug Production Issue
+```bash
+/connect prod
+tail -100 /var/log/app/error.log
+# ... investigate ...
+/local
+```
+
+### Compare Configs Between Servers
+```bash
+# Copy configs to local
+/copy dev:/etc/app/config.yaml local:/tmp/dev-config
+/copy prod:/etc/app/config.yaml local:/tmp/prod-config
+
+# Switch to local and compare
+/local
+diff /tmp/dev-config /tmp/prod-config
+```
+
+### Multi-Server Update
+```bash
+# Update staging
+/connect staging
+cd /app && git pull && npm run build && sudo systemctl restart app
+
+# Update prod
+/switch prod
+cd /app && git pull && npm run build && sudo systemctl restart app
+
+# Back to local
+/local
+```
+
+## Error Handling
+
+If you get authentication errors:
+```bash
+/connect prod
+# Error: AUTH_KEY_FAILED
+# → User needs to run: /auth prod
+```
+
+If you get host key errors:
+```bash
+/connect newserver
+# Error: HOST_KEY_UNKNOWN
+# → User needs to run: /trust newserver
+```
+
+If session doesn't exist:
+```bash
+/connect newserver
+# Error: Session 'newserver' not found
+# → User can run: /add-session newserver host.example.com
+```
+
+## Common Pitfalls
+
+❌ **Don't** use `export` - use `/env` instead
+❌ **Don't** use `scp` - use `/copy` instead
+❌ **Don't** run interactive commands without `/shell` prefix (vim, top, etc.)
+❌ **Don't** forget to check `/status` before connecting
+❌ **Don't** forget to return to `/local` when done
+
+## Configuration Files
+
+Sessions are configured in:
+- `~/.config/thop/config.toml` - thop configuration
+- `~/.ssh/config` - SSH host aliases (thop reads this too)
+
+State is persisted in:
+- `~/.local/share/thop/state.json` - Current sessions, cwd, environment
+
+## Key Principles
+
+1. **Non-blocking**: thop never waits for user input. All operations return immediately with actionable errors.
+2. **State Persistence**: Working directory and environment persist per session across commands and even thop restarts.
+3. **Instant Switching**: Switch between sessions in <50ms with full context.
+
+## Security Notes
+
+- thop never stores passwords
+- State file has user-only permissions (0600)
+- No credentials in logs
+- Never auto-accepts host keys (must use `/trust`)
+
+---
+
+**Remember**: You have a superpower - seamless multi-server workflows. Use thop commands to move between local and remote contexts instantly while maintaining state!
